@@ -4,11 +4,9 @@ import { logger } from '../utils/logger';
 
 type TranscriptCallback = (text: string, confidence: number, isFinal: boolean) => void;
 
-interface STTStream {
+export interface STTStream {
   sendAudio: (chunk: Buffer) => void;
-  /** Gracefully end the stream — sends CloseStream, waits for final results */
   finalize: () => void;
-  /** Abrupt cleanup on disconnect/error */
   close: () => void;
 }
 
@@ -34,10 +32,18 @@ export function createSTTStream(
 
   let isOpen = false;
   let finalized = false;
+  const audioBuffer: Buffer[] = [];
 
   ws.on('open', () => {
     isOpen = true;
     logger.info('Deepgram WebSocket connected');
+    // Flush buffered audio
+    if (audioBuffer.length > 0) {
+      for (const chunk of audioBuffer) {
+        ws.send(chunk);
+      }
+      audioBuffer.length = 0;
+    }
   });
 
   ws.on('message', (data: WebSocket.Data) => {
@@ -69,12 +75,14 @@ export function createSTTStream(
     sendAudio(chunk: Buffer) {
       if (isOpen) {
         ws.send(chunk);
+      } else if (!finalized) {
+        // Buffer audio until Deepgram connection opens
+        audioBuffer.push(chunk);
       }
     },
     finalize() {
       if (isOpen && !finalized) {
         finalized = true;
-        // Send CloseStream to let Deepgram send final transcript before closing
         ws.send(JSON.stringify({ type: 'CloseStream' }));
         logger.info('Deepgram CloseStream sent');
       }
