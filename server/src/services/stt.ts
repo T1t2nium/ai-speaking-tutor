@@ -6,7 +6,7 @@ type TranscriptCallback = (text: string, confidence: number, isFinal: boolean) =
 
 export interface STTStream {
   sendAudio: (chunk: Buffer) => void;
-  finalize: () => void;
+  finalize: () => Promise<void>;
   close: () => void;
 }
 
@@ -32,6 +32,8 @@ export function createSTTStream(
 
   let isOpen = false;
   let finalized = false;
+  let resolveFinalize: (() => void) | null = null;
+  const FINALIZE_TIMEOUT = 5000;
   const audioBuffer: Buffer[] = [];
 
   ws.on('open', () => {
@@ -53,7 +55,13 @@ export function createSTTStream(
       const alt = channel?.alternatives?.[0];
       if (!alt?.transcript) return;
 
-      onTranscript(alt.transcript, alt.confidence ?? 0, result.is_final ?? false);
+      const isFinal = result.is_final ?? false;
+      onTranscript(alt.transcript, alt.confidence ?? 0, isFinal);
+
+      if (isFinal && resolveFinalize) {
+        resolveFinalize();
+        resolveFinalize = null;
+      }
     } catch {
       // Skip unparseable frames
     }
@@ -62,12 +70,21 @@ export function createSTTStream(
   ws.on('close', () => {
     isOpen = false;
     logger.info('Deepgram WebSocket closed');
+    // Resolve pending finalize on unexpected close
+    if (resolveFinalize) {
+      resolveFinalize();
+      resolveFinalize = null;
+    }
     onClosed?.();
   });
 
   ws.on('error', (err: Error) => {
     logger.error('Deepgram WebSocket error:', err.message);
     isOpen = false;
+    if (resolveFinalize) {
+      resolveFinalize();
+      resolveFinalize = null;
+    }
     onClosed?.();
   });
 
@@ -80,12 +97,23 @@ export function createSTTStream(
         audioBuffer.push(chunk);
       }
     },
-    finalize() {
-      if (isOpen && !finalized) {
-        finalized = true;
-        ws.send(JSON.stringify({ type: 'CloseStream' }));
-        logger.info('Deepgram CloseStream sent');
-      }
+    finalize(): Promise<void> {
+      if (!isOpen || finalized) return Promise.resolve();
+      finalized = true;
+      ws.send(JSON.stringify({ type: 'CloseStream' }));
+      logger.info('Deepgram CloseStream sent');
+
+      return new Promise((resolve) => {
+        resolveFinalize = resolve;
+        // Safety timeout: resolve if no final transcript arrives
+        setTimeout(() => {
+          if (resolveFinalize) {
+            logger.warn('STT finalize timed out waiting for final transcript');
+            resolveFinalize();
+            resolveFinalize = null;
+          }
+        }, FINALIZE_TIMEOUT);
+      });
     },
     close() {
       if (isOpen) {

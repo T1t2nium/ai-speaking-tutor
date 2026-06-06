@@ -27,13 +27,13 @@
 
 ## In Progress
 
-### Phase 3: Full Voice Conversation Loop
-- [ ] ElevenLabs TTS integration (streaming)
-- [ ] Audio pipeline: STT → LLM → TTS → playback
-- [ ] Streaming AI audio playback on client
-- [ ] End-to-end voice-in voice-out conversation
+### Phase 3: Full Voice Conversation Loop ✅
+- [x] ElevenLabs TTS integration (streaming REST API, MP3 output)
+- [x] Audio pipeline: STT → LLM → TTS → playback
+- [x] Binary audio frames client → accumulate → decode → play
+- [x] End-to-end voice-in voice-out conversation
 
-## Backlog
+## In Progress
 
 ### Phase 4: VAD & Natural Turn-Taking
 - [ ] Silero VAD model (ONNX in-browser)

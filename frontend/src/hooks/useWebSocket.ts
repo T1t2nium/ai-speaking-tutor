@@ -9,6 +9,7 @@ type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 interface UseWebSocketOptions {
   sessionId: string | null;
   onTextMessage?: (msg: WsServerMessage) => void;
+  onBinaryMessage?: (chunk: ArrayBuffer) => void;
 }
 
 interface UseWebSocketReturn {
@@ -20,14 +21,17 @@ interface UseWebSocketReturn {
 export function useWebSocket({
   sessionId,
   onTextMessage,
+  onBinaryMessage,
 }: UseWebSocketOptions): UseWebSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onTextMessage);
+  const onBinaryRef = useRef(onBinaryMessage);
   const cancelledRef = useRef(false);
   const reconnectCountRef = useRef(0);
 
   onMessageRef.current = onTextMessage;
+  onBinaryRef.current = onBinaryMessage;
 
   useEffect(() => {
     if (!sessionId) return;
@@ -59,7 +63,10 @@ export function useWebSocket({
 
       ws.onmessage = (event) => {
         if (cancelledRef.current) return;
-        if (event.data instanceof ArrayBuffer) return;
+        if (event.data instanceof ArrayBuffer) {
+          onBinaryRef.current?.(event.data);
+          return;
+        }
         try {
           const msg: WsServerMessage = JSON.parse(event.data);
           onMessageRef.current?.(msg);

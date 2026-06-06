@@ -3,9 +3,11 @@ import type { WebSocket as WsType } from 'ws';
 import type { WsClientMessage } from '@tutor/shared';
 import { getScenarioById } from '@tutor/shared/scenarios';
 import WebSocket from 'ws';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 import { createSTTStream, STTStream } from '../services/stt';
 import { streamChat } from '../services/llm';
+import { streamTTS } from '../services/tts';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -60,16 +62,42 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
       return;
     }
 
+    let aiText = '';
     try {
-      const aiText = await streamChat(history, (_chunk) => {});
-      if (aiText && socket.readyState === WebSocket.OPEN) {
-        history.push({ role: 'assistant', content: aiText });
-        socket.send(JSON.stringify({ type: 'ai_response_start', text: aiText }));
-      }
+      aiText = await streamChat(history, (_chunk) => {});
     } catch (err) {
       logger.error('LLM error:', err);
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'error', code: 'llm_error', message: 'Failed to generate response.' }));
+        socket.send(JSON.stringify({ type: 'ai_response_end' }));
+      }
+      generating = false;
+      return;
+    }
+
+    if (!aiText || socket.readyState !== WebSocket.OPEN) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'ai_response_end' }));
+      }
+      generating = false;
+      return;
+    }
+
+    history.push({ role: 'assistant', content: aiText });
+    socket.send(JSON.stringify({ type: 'ai_response_start', text: aiText }));
+
+    // Stream TTS audio
+    try {
+      const voiceId = scenario?.voiceId || config.elevenlabs.voiceId;
+      await streamTTS(aiText, voiceId, (chunk) => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(chunk);
+        }
+      });
+    } catch (err) {
+      logger.error('TTS error:', err);
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'error', code: 'tts_error', message: 'Failed to generate audio.' }));
       }
     }
 
@@ -90,7 +118,7 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     } : null,
   }));
 
-  socket.on('message', (raw, isBinary) => {
+  socket.on('message', async (raw, isBinary) => {
     // Binary frames = audio data, text frames = JSON control messages
     if (isBinary) {
       getOrCreateSTT().sendAudio(Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer));
@@ -103,11 +131,10 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
       switch (msg.type) {
         case 'audio_end':
           logger.info(`audio_end received, stt=${!!stt}`);
-          // Close STT if open
+          // Finalize STT and wait for final transcript before triggering LLM
           if (stt) {
-            stt.finalize();
+            await stt.finalize();
           }
-          // Trigger LLM — history already has user messages from auto-finalization
           generateResponse();
           break;
         case 'ping':
