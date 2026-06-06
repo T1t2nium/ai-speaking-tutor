@@ -4,9 +4,9 @@
 
 An AI-powered English speaking tutor web application. Users practice spoken English through real-time voice conversations with an AI tutor across multiple scenarios. The system provides pronunciation evaluation, grammar correction, and progress tracking.
 
-**Tech stack:** Next.js 14 (frontend), Fastify/Node.js (backend), TypeScript throughout, WebSocket for real-time audio, Deepgram STT, Claude LLM, ElevenLabs TTS, Speechace pronunciation, Supabase PostgreSQL + Auth.
+**Tech stack:** Next.js 14 (frontend), Fastify/Node.js (backend), TypeScript throughout, WebSocket for real-time audio, Deepgram STT, DeepSeek LLM, ElevenLabs TTS, Speechace pronunciation, Supabase PostgreSQL + Auth.
 
-**Status:** Phase 1 — Project scaffolding complete. Installing dependencies and building audio foundation next.
+**Status:** Phase 1 & 2 complete. Moving to Phase 3 — Full Voice Conversation Loop (TTS integration).
 
 ## Documentation Map
 

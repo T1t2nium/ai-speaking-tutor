@@ -1,47 +1,49 @@
 # Changelog
 
-## 2026-06-05 — Project Initialization
+## 2026-06-06 — Phase 2: DeepSeek AI Conversation
 
 ### Created
-- Project directory structure (frontend/, server/, shared/, docs/, dev-logs/, scripts/)
-- Root package.json with npm workspaces configuration
-- `shared/` package with TypeScript types and scenario definitions
-- `frontend/` package.json with Next.js 14, React 18, Tailwind, Zustand
-- `server/` package.json with Fastify, WebSocket, Anthropic SDK
-- `.gitignore` for Node.js/Next.js project
-- `.env.example` with all required API keys
-- `docs/` with 5 specification documents:
-  - `01-requirements.md` — Product requirements and user stories
-  - `02-tech-spec.md` — Technical specification and architecture
-  - `03-design-system.md` — UI/UX design guidelines
-  - `04-implementation.md` — Phased implementation plan
-  - `05-api-protocol.md` — REST API and WebSocket protocol specs
-- `dev-logs/TODO.md` — Task tracking for all phases
-- `dev-logs/CHANGELOG.md` — This file
-- `CLAUDE.md` — AI assistant guidance
-- `README.md` — Project overview and setup instructions
-- Git repository initialized
-
-## 2026-06-05 — Audio Pipeline Implementation
-
-### Created
-- `server/src/services/stt.ts` — Deepgram streaming STT via WebSocket (Nova-2, Opus, interim results)
-- `frontend/src/lib/audio.ts` — Microphone capture with MediaRecorder Opus encoding, Blob→ArrayBuffer util
-- `frontend/src/lib/constants.ts` — WS_BASE_URL and API_BASE_URL config
-- `frontend/src/hooks/useAudioRecorder.ts` — Mic capture hook with permission error handling
-- `frontend/src/hooks/useAudioPlayback.ts` — Streaming AudioContext playback with gapless queue
-- `frontend/src/hooks/useWebSocket.ts` — WebSocket lifecycle with binary frames and auto-reconnect
-- `frontend/src/hooks/useConversation.ts` — Master orchestrator connecting mic → WS → server → transcript
-- `frontend/src/store/conversationStore.ts` — Zustand store for conversation state, messages, phase
+- `server/src/services/llm.ts` — DeepSeek streaming chat (OpenAI-compatible API, 30s timeout)
 
 ### Modified
-- `server/src/websocket/handler.ts` — Integrated Deepgram STT, routes audio chunks and control messages
-- `frontend/src/app/session/[id]/page.tsx` — Connected to useConversation hook, live transcript display
-- `server/tsconfig.json` — Fixed rootDir to include shared types
-- `server/package.json` — Added @deepgram/sdk dependency
+- `server/src/websocket/handler.ts` — Full conversation pipeline:
+  - Scenario system prompt injection
+  - Per-session conversation history (system + user + assistant)
+  - isBinary routing to distinguish audio frames from JSON control messages
+  - STT lazy creation with audio buffering (no lost chunks)
+  - Per-turn STT rebuild for multi-turn support
+  - Direct LLM trigger on audio_end (no callback chain)
+- `server/src/services/stt.ts` — Audio buffering, exported STTStream interface
+- `server/src/config.ts` — Added deepseek config, dotenv path fix
+- `shared/types.ts` — Updated connected message shape
+- `frontend/src/store/conversationStore.ts` — AI message handling, phase fixes
+- `frontend/src/hooks/useWebSocket.ts` — Ghost connection prevention, cleanup fixes
+- `.env` — DeepSeek API key added
+
+### Key Bug Fixes
+- WS double-connection from React Strict Mode (always close on cleanup)
+- isBinary routing: text JSON messages were sent to Deepgram as audio
+- STT idle timeout preventing multi-turn (on-demand creation)
+- Phase stuck in Processing after auto-finalization (manual stop only)
 
 ### Verified
-- Server starts and compiles clean (TypeScript strict)
-- Frontend builds successfully
-- WebSocket connection lifecycle works
-- Deepgram STT service connects (tests pending browser verification)
+- Full flow: mic → STT → DeepSeek → AI response displayed in browser
+- Multi-turn conversation works across multiple speak/stop cycles
+- Server and frontend builds pass
+
+---
+
+## 2026-06-05 — Phase 1: Audio Pipeline & Project Scaffolding
+
+### Created
+- Project directory structure, npm workspaces, git repo
+- `docs/` with 5 specification documents
+- `dev-logs/` with TODO.md and CHANGELOG.md
+- `CLAUDE.md`, `README.md`, `.env.example`, `.gitignore`
+- `shared/` — TypeScript types and 4 scenario definitions
+- `frontend/` — Next.js 14, Tailwind, landing page, session page, Zustand store
+- `server/` — Fastify + WebSocket + Deepgram STT service
+- Audio hooks: useAudioRecorder, useAudioPlayback, useWebSocket, useConversation
+- `server/src/services/stt.ts` — Deepgram streaming STT (Nova-2, linear16, 16kHz)
+- `frontend/src/lib/audio.ts` — PCM audio capture with ScriptProcessorNode
+- `.env` — API keys for Deepgram and DeepSeek

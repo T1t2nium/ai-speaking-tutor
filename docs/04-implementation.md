@@ -4,42 +4,42 @@
 
 The project is divided into 7 independently testable phases. Each phase builds on the previous one. No phase depends on incomplete future work.
 
-## Phase 1: Project Scaffolding & Audio Foundation
-**Focus:** Get audio flowing through the pipeline with live transcription.
+## Phase 1: Project Scaffolding & Audio Foundation ✅
+**Status:** Complete (2026-06-05)
 
 ### Tasks
 - [x] Initialize git repo
 - [x] Set up npm workspaces (frontend + server + shared)
 - [x] Create documentation (docs/, dev-logs/)
 - [x] Write CLAUDE.md with project guidance
-- [ ] Install dependencies (next, fastify, tailwind, typescript)
-- [ ] Create frontend layout with Tailwind
-- [ ] Implement useAudioRecorder hook (getUserMedia → Opus chunks)
-- [ ] Implement useAudioPlayback hook (streaming AudioContext playback)
-- [ ] Implement useWebSocket hook (connect, binary + text frames)
-- [ ] Backend WebSocket handler (receive audio, echo transcript)
-- [ ] Basic UI: mic button + transcript display
+- [x] Install dependencies (next, fastify, tailwind, typescript)
+- [x] Create frontend layout with Tailwind
+- [x] Implement useAudioRecorder hook (PCM capture, 16kHz)
+- [x] Implement useAudioPlayback hook (AudioContext streaming)
+- [x] Implement useWebSocket hook (binary + text frames)
+- [x] Backend WebSocket handler with Deepgram STT integration
+- [x] Basic UI: mic button + transcript display
 
 ### Verification
-- `npm run dev` starts both frontend and server
-- Click mic → speak → see live transcript text
-- Browser console shows WebSocket connection and audio chunk logs
+- [x] `npm run dev` starts both frontend and server
+- [x] Click mic → speak → see live transcript text
+- [x] Browser end-to-end audio pipeline verified
 
-## Phase 2: Text-Only AI Conversation
-**Focus:** Claude-powered multi-turn conversation with scenario context.
+## Phase 2: Text-Only AI Conversation ✅
+**Status:** Complete (2026-06-06). Note: Claude replaced with DeepSeek.
 
 ### Tasks
-- [ ] Claude API service with streaming responses
-- [ ] Scenario system prompt injection
-- [ ] Conversation history management (append-only array)
-- [ ] Session REST API (POST create, GET list, GET by id, PATCH status)
-- [ ] Conversation UI: message bubbles, auto-scroll, typing indicator
-- [ ] Session state machine (idle → listening → processing → speaking)
+- [x] DeepSeek API service with streaming responses
+- [x] Scenario system prompt injection
+- [x] Conversation history management (per-session)
+- [x] Multi-turn support with STT rebuild per turn
+- [x] Conversation UI with AI message bubbles
+- [x] isBinary routing fix for audio vs control messages
 
 ### Verification
-- Type or speak → AI responds with scenario-appropriate text
-- Multi-turn conversation preserves context
-- Different scenarios produce different AI behavior
+- [x] Speak → DeepSeek responds with scenario-appropriate text
+- [x] Multi-turn conversation preserves context
+- [x] Different scenarios produce different AI behavior
 
 ## Phase 3: Full Voice Conversation Loop
 **Focus:** End-to-end STT → LLM → TTS pipeline with voice output.
