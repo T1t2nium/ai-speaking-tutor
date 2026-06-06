@@ -22,44 +22,41 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     history.push({ role: 'system', content: scenario.systemPrompt });
   }
 
-  // STT lifecycle: created on-demand, destroyed after each turn
   let stt: STTStream | null = null;
-  let isProcessing = false; // True while LLM is running (between audio_end and response)
+  let generating = false;
 
   function getOrCreateSTT(): STTStream {
     if (!stt) {
       stt = createSTTStream(
-        // onTranscript
-        (text, confidence, isFinal) => {
+        (text, _confidence, isFinal) => {
           if (socket.readyState !== WebSocket.OPEN) return;
           if (isFinal) {
             history.push({ role: 'user', content: text });
-            socket.send(JSON.stringify({ type: 'final_transcript', text, confidence }));
+            socket.send(JSON.stringify({ type: 'final_transcript', text, confidence: _confidence }));
           } else {
-            socket.send(JSON.stringify({ type: 'interim_transcript', text, confidence }));
+            socket.send(JSON.stringify({ type: 'interim_transcript', text, confidence: _confidence }));
           }
         },
-        // onClosed — when Deepgram disconnects (finalize or timeout)
+        // onClosed — just cleanup, nothing else
         () => {
-          logger.info(`STT closed, isProcessing=${isProcessing}, historyUserMsgs=${history.filter(m => m.role === 'user').length}`);
+          logger.info('STT disconnected');
           stt = null;
-          if (isProcessing) {
-            triggerLLM();
-          }
         },
       );
     }
     return stt;
   }
 
-  async function triggerLLM() {
-    isProcessing = true;
-    const lastUser = history.filter((m) => m.role === 'user').pop();
-    logger.info(`triggerLLM: lastUser=${lastUser?.content?.slice(0, 50)}, socketOpen=${socket.readyState === WebSocket.OPEN}`);
-    if (!lastUser || socket.readyState !== WebSocket.OPEN) {
-      logger.warn('triggerLLM: no user message or socket closed, skipping');
+  async function generateResponse() {
+    if (generating) return;
+    generating = true;
+
+    const userMessages = history.filter((m) => m.role === 'user');
+    logger.info(`generateResponse: ${userMessages.length} user messages`);
+
+    if (userMessages.length === 0 || socket.readyState !== WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'ai_response_end' }));
-      isProcessing = false;
+      generating = false;
       return;
     }
 
@@ -72,18 +69,14 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     } catch (err) {
       logger.error('LLM error:', err);
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'error',
-          code: 'llm_error',
-          message: 'Failed to generate response. Please try again.',
-        }));
+        socket.send(JSON.stringify({ type: 'error', code: 'llm_error', message: 'Failed to generate response.' }));
       }
     }
 
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'ai_response_end' }));
     }
-    isProcessing = false;
+    generating = false;
   }
 
   socket.send(JSON.stringify({
@@ -108,16 +101,13 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
 
       switch (msg.type) {
         case 'audio_end':
-          logger.info(`audio_end: stt=${!!stt}`);
+          logger.info(`audio_end received, stt=${!!stt}`);
+          // Close STT if open
           if (stt) {
-            isProcessing = true;
             stt.finalize();
-          } else {
-            // No STT active (perhaps it timed out) — just acknowledge
-            socket.send(JSON.stringify({ type: 'ai_response_end' }));
           }
-          break;
-        case 'interrupt':
+          // Trigger LLM — history already has user messages from auto-finalization
+          generateResponse();
           break;
         case 'ping':
           socket.send(JSON.stringify({ type: 'pong' }));
