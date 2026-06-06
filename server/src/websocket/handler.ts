@@ -41,12 +41,11 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
         },
         // onClosed — when Deepgram disconnects (finalize or timeout)
         () => {
+          logger.info(`STT closed, isProcessing=${isProcessing}, historyUserMsgs=${history.filter(m => m.role === 'user').length}`);
           stt = null;
           if (isProcessing) {
-            // User clicked stop → trigger LLM
             triggerLLM();
           }
-          // If not processing, Deepgram timed out — just clean up, next audio creates new STT
         },
       );
     }
@@ -56,7 +55,9 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
   async function triggerLLM() {
     isProcessing = true;
     const lastUser = history.filter((m) => m.role === 'user').pop();
+    logger.info(`triggerLLM: lastUser=${lastUser?.content?.slice(0, 50)}, socketOpen=${socket.readyState === WebSocket.OPEN}`);
     if (!lastUser || socket.readyState !== WebSocket.OPEN) {
+      logger.warn('triggerLLM: no user message or socket closed, skipping');
       socket.send(JSON.stringify({ type: 'ai_response_end' }));
       isProcessing = false;
       return;
@@ -107,6 +108,7 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
 
       switch (msg.type) {
         case 'audio_end':
+          logger.info(`audio_end: stt=${!!stt}`);
           if (stt) {
             isProcessing = true;
             stt.finalize();
