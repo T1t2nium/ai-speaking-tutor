@@ -90,9 +90,10 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     } : null,
   }));
 
-  socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[]) => {
-    if (Buffer.isBuffer(raw)) {
-      getOrCreateSTT().sendAudio(raw);
+  socket.on('message', (raw, isBinary) => {
+    // Binary frames = audio data, text frames = JSON control messages
+    if (isBinary) {
+      getOrCreateSTT().sendAudio(Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer));
       return;
     }
 
