@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 import { logger } from '../utils/logger';
 import { createSTTStream } from '../services/stt';
 
-export async function wsHandler(socket: WsType, req: FastifyRequest) {
+export function wsHandler(socket: WsType, req: FastifyRequest) {
   const { sessionId } = req.params as { sessionId: string };
   logger.info(`WebSocket connected for session: ${sessionId}`);
 

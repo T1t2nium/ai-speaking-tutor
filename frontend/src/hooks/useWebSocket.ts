@@ -24,11 +24,16 @@ export function useWebSocket({
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onTextMessage);
+  const mountedRef = useRef(true);
 
-  // Keep callback ref in sync without triggering reconnection
+  // Keep callback ref in sync
   onMessageRef.current = onTextMessage;
 
-  // Connect only when sessionId changes, NOT when callback changes
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -37,7 +42,9 @@ export function useWebSocket({
     wsRef.current = ws;
     ws.binaryType = 'arraybuffer';
 
-    ws.onopen = () => setStatus('connected');
+    ws.onopen = () => {
+      if (mountedRef.current) setStatus('connected');
+    };
 
     ws.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) return;
@@ -50,18 +57,24 @@ export function useWebSocket({
     };
 
     ws.onclose = () => {
-      setStatus('disconnected');
+      if (mountedRef.current) setStatus('disconnected');
       wsRef.current = null;
     };
 
     ws.onerror = () => {
-      ws.close();
+      // Only close if the WS is still connecting — if already open, let onclose handle it
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
     };
 
     return () => {
-      ws.close();
+      // Avoid closing if already CLOSED/CLOSING (React Strict Mode double-mount)
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
     };
-  }, [sessionId]); // Only reconnect when sessionId changes
+  }, [sessionId]);
 
   const sendAudio = useCallback((chunk: ArrayBuffer) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
