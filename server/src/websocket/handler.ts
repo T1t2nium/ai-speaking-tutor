@@ -108,6 +108,7 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
       switch (msg.type) {
         case 'audio_end':
           if (stt) {
+            isProcessing = true;
             stt.finalize();
           } else {
             // No STT active (perhaps it timed out) — just acknowledge
