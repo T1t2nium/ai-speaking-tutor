@@ -1,8 +1,8 @@
 # TODO — AI Speaking Tutor
 
-## In Progress
+## Completed
 
-### Phase 1: Project Scaffolding & Audio Foundation
+### Phase 1: Project Scaffolding & Audio Foundation ✅
 - [x] Initialize git repo
 - [x] Set up npm workspaces
 - [x] Install npm dependencies
@@ -20,22 +20,24 @@
 - [x] Implement useWebSocket hook
 - [x] Connect WS handler to Deepgram STT
 - [x] Wire up mic button → transcript display flow
-- [ ] Verify end-to-end audio pipeline (needs browser testing)
+- [x] Verify end-to-end audio pipeline ✅ (browser tested)
 
-## Backlog
+## In Progress
 
 ### Phase 2: Text-Only AI Conversation
-- [ ] Claude API service with streaming
-- [ ] Scenario prompt injection
+- [ ] Claude API service with streaming responses
+- [ ] Scenario prompt injection into system prompt
 - [ ] Conversation history management
 - [ ] Session REST API endpoints
-- [ ] Conversation UI with message bubbles
-- [ ] Session state machine
+- [ ] Conversation UI with AI message bubbles
+- [ ] Wire Claude response into WS pipeline after STT finalizes
+
+## Backlog
 
 ### Phase 3: Full Voice Conversation Loop
 - [ ] Audio pipeline orchestrator
 - [ ] ElevenLabs TTS integration
-- [ ] End-to-end STT→LLM→TTS pipeline
+- [ ] End-to-end STT → LLM → TTS pipeline
 - [ ] Streaming audio playback
 
 ### Phase 4: VAD & Natural Turn-Taking
