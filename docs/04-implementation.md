@@ -41,20 +41,20 @@ The project is divided into 7 independently testable phases. Each phase builds o
 - [x] Multi-turn conversation preserves context
 - [x] Different scenarios produce different AI behavior
 
-## Phase 3: Full Voice Conversation Loop
-**Focus:** End-to-end STT → LLM → TTS pipeline with voice output.
+## Phase 3: Full Voice Conversation Loop ✅
+**Status:** Complete (2026-06-06)
 
 ### Tasks
-- [ ] Audio pipeline orchestrator (audioPipeline.ts)
-- [ ] ElevenLabs streaming TTS integration
-- [ ] Connect STT output → LLM input → TTS output
-- [ ] Streaming audio playback on client
-- [ ] Interim transcript display during speech
+- [x] Audio pipeline orchestrator (in handler.ts)
+- [x] ElevenLabs streaming TTS integration
+- [x] Connect STT output → LLM input → TTS output
+- [x] Streaming audio playback on client (accumulate + decode)
+- [x] Interim transcript display during speech
 
 ### Verification
-- Speak → AI responds by voice → multi-turn works
-- Audio quality is clear and natural
-- Turn transitions feel reasonably fast
+- [x] Speak → AI responds by voice → multi-turn works
+- [x] Audio quality is clear and natural
+- [x] Turn transitions feel reasonably fast
 
 ## Phase 4: VAD & Natural Turn-Taking
 **Focus:** Automatic speech detection and interruption handling.

@@ -9,7 +9,7 @@ import type { WsServerMessage } from '@tutor/shared';
 
 /**
  * Master hook that orchestrates the audio conversation pipeline:
- * mic → WebSocket → server STT → transcript → (future: LLM → TTS)
+ * mic → WebSocket → server STT → LLM → TTS → playback
  */
 export function useConversation(sessionId: string | null) {
   const phase = useConversationStore((s) => s.phase);
@@ -18,16 +18,63 @@ export function useConversation(sessionId: string | null) {
   const wsStoreStatus = useConversationStore((s) => s.wsStatus);
   const storeError = useConversationStore((s) => s.error);
 
-  const handleServerMessage = useCallback((msg: WsServerMessage) => {
-    if (msg.type === 'ai_audio_chunk') {
-      return;
-    }
-    useConversationStore.getState().handleServerMessage(msg);
+  const audioPlayback = useAudioPlayback();
+  const audioChunksRef = useRef<ArrayBuffer[]>([]);
+  const lastAiTextRef = useRef('');
+
+  const speakWithBrowserTTS = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
   }, []);
+
+  const onBinaryMessage = useCallback((chunk: ArrayBuffer) => {
+    audioChunksRef.current.push(chunk);
+  }, []);
+
+  const handleServerMessage = useCallback((msg: WsServerMessage) => {
+    if (msg.type === 'ai_response_start' && msg.text) {
+      lastAiTextRef.current = msg.text;
+    }
+
+    if (msg.type === 'ai_response_end') {
+      const chunks = audioChunksRef.current;
+      if (chunks.length > 0) {
+        // Server TTS audio received — decode and play
+        const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+        const combined = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const c of chunks) {
+          combined.set(new Uint8Array(c), offset);
+          offset += c.byteLength;
+        }
+        audioChunksRef.current = [];
+        audioPlayback.enqueue(combined.buffer);
+        audioPlayback.startPlayback();
+        lastAiTextRef.current = '';
+      } else if (lastAiTextRef.current) {
+        // No server TTS audio — fall back to browser speechSynthesis
+        speakWithBrowserTTS(lastAiTextRef.current);
+        lastAiTextRef.current = '';
+      }
+    }
+
+    if (msg.type === 'error' && msg.code === 'tts_error' && lastAiTextRef.current) {
+      // TTS failed — fall back to browser speechSynthesis
+      speakWithBrowserTTS(lastAiTextRef.current);
+      lastAiTextRef.current = '';
+    }
+
+    useConversationStore.getState().handleServerMessage(msg);
+  }, [audioPlayback, speakWithBrowserTTS]);
 
   const { status: wsStatus, sendAudio, sendMessage } = useWebSocket({
     sessionId,
     onTextMessage: handleServerMessage,
+    onBinaryMessage,
   });
 
   useEffect(() => {
@@ -35,8 +82,6 @@ export function useConversation(sessionId: string | null) {
       useConversationStore.getState().setWsStatus(wsStatus);
     }
   }, [wsStatus, wsStoreStatus]);
-
-  const audioPlayback = useAudioPlayback();
 
   // Convert Int16Array PCM to ArrayBuffer for WebSocket binary send
   const sendAudioRef = useRef(sendAudio);

@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-06-06 — Phase 3 Fixes: LLM Retry + STT Finalize Race + TTS Fallback
+
+### Modified
+- `server/src/services/llm.ts` — Retry on socket errors (3 attempts, 1s/2s/4s backoff)
+- `server/src/services/stt.ts` — `finalize()` returns Promise, resolves on final transcript or 5s timeout
+- `server/src/websocket/handler.ts` — `await stt.finalize()` before `generateResponse()` to fix transcript race
+- `server/src/services/tts.ts` — 402 downgraded to WARN (free tier is expected)
+- `frontend/src/hooks/useConversation.ts` — Browser speechSynthesis fallback when TTS fails
+
+### Key Bug Fixes
+- STT finalize race condition: `generateResponse()` sometimes ran before final transcript arrived
+- DeepSeek `UND_ERR_SOCKET` intermittent failures now auto-retry
+- Noisy ElevenLabs 402 ERROR → WARN (browser TTS handles it gracefully)
+
+### Verified
+- Transcripts appear consistently on every turn
+- DeepSeek retries recover from intermittent socket failures
+- Browser TTS fallback works when ElevenLabs is unavailable
+
+---
+
+## 2026-06-06 — Phase 3: Full Voice Conversation Loop
+
+### Created
+- `server/src/services/tts.ts` — ElevenLabs streaming TTS (REST API, MP3 output, 30s timeout)
+
+### Modified
+- `server/src/websocket/handler.ts` — Full voice pipeline:
+  - TTS called after LLM generates response
+  - `ai_response_start` sent before TTS (text appears immediately)
+  - TTS MP3 chunks streamed as binary WS frames
+  - `ai_response_end` sent after TTS completes
+  - TTS errors caught gracefully (client doesn't hang)
+  - Voice determined from scenario.voiceId or config default
+- `server/src/config.ts` — Added `elevenlabs.voiceId` (default: Rachel)
+- `frontend/src/hooks/useWebSocket.ts` — Added `onBinaryMessage` callback for incoming binary frames
+- `frontend/src/hooks/useConversation.ts` — Accumulates TTS audio chunks, concatenates on `ai_response_end`, plays via AudioContext
+- `.env.example` — Added ELEVENLABS_VOICE_ID and DEEPSEEK_API_KEY
+
+### Verified
+- Full voice loop: speak → transcript → AI text bubble → AI voice response through speakers
+- Multi-turn voice conversation works
+- Server and frontend builds pass
+
+---
+
 ## 2026-06-06 — Phase 2: DeepSeek AI Conversation
 
 ### Created
