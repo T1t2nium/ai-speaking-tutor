@@ -20,9 +20,9 @@ export function createSTTStream(onTranscript: TranscriptCallback): STTStream {
     `&language=en` +
     `&smart_format=true` +
     `&interim_results=true` +
-    `&encoding=opus` +
+    `&encoding=linear16` +
     `&channels=1` +
-    `&sample_rate=48000`;
+    `&sample_rate=16000`;
 
   const ws = new WebSocket(url, {
     headers: {

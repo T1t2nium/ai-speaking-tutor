@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { createMicrophoneStream, blobToArrayBuffer } from '@/lib/audio';
+import { createMicrophoneStream } from '@/lib/audio';
 
 interface UseAudioRecorderOptions {
-  onChunk: (chunk: ArrayBuffer) => void;
+  onChunk: (chunk: Int16Array) => void;
   onStreamReady?: (stream: MediaStream) => void;
 }
 
@@ -33,9 +33,8 @@ export function useAudioRecorder({
       const recorder = await createMicrophoneStream();
       recorderRef.current = recorder;
 
-      recorder.onChunk(async (blob) => {
-        const buffer = await blobToArrayBuffer(blob);
-        onChunk(buffer);
+      recorder.onChunk((chunk) => {
+        onChunk(chunk);
       });
 
       if (onStreamReady) {

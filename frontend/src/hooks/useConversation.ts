@@ -18,10 +18,8 @@ export function useConversation(sessionId: string | null) {
   const wsStoreStatus = useConversationStore((s) => s.wsStatus);
   const storeError = useConversationStore((s) => s.error);
 
-  // Use getState() in callbacks to avoid depending on reactive store reference
   const handleServerMessage = useCallback((msg: WsServerMessage) => {
     if (msg.type === 'ai_audio_chunk') {
-      // TODO: enqueue audio for playback (Phase 3)
       return;
     }
     useConversationStore.getState().handleServerMessage(msg);
@@ -32,7 +30,6 @@ export function useConversation(sessionId: string | null) {
     onTextMessage: handleServerMessage,
   });
 
-  // Sync WS status to store (in effect, not during render)
   useEffect(() => {
     if (wsStoreStatus !== wsStatus) {
       useConversationStore.getState().setWsStatus(wsStatus);
@@ -41,12 +38,13 @@ export function useConversation(sessionId: string | null) {
 
   const audioPlayback = useAudioPlayback();
 
-  // Use refs for functions that useAudioRecorder depends on, to keep start() stable
+  // Convert Int16Array PCM to ArrayBuffer for WebSocket binary send
   const sendAudioRef = useRef(sendAudio);
   sendAudioRef.current = sendAudio;
 
-  const handleAudioChunk = useCallback((chunk: ArrayBuffer) => {
-    sendAudioRef.current(chunk);
+  const handleAudioChunk = useCallback((chunk: Int16Array) => {
+    const buffer = (chunk.buffer as ArrayBuffer).slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+    sendAudioRef.current(buffer);
   }, []);
 
   const audioRecorder = useAudioRecorder({
@@ -56,6 +54,7 @@ export function useConversation(sessionId: string | null) {
   const startSpeaking = useCallback(async () => {
     const currentPhase = useConversationStore.getState().phase;
     if (currentPhase === 'idle') {
+      useConversationStore.getState().setPhase('listening');
       await audioRecorder.start();
     }
   }, [audioRecorder]);
@@ -64,6 +63,7 @@ export function useConversation(sessionId: string | null) {
     const currentPhase = useConversationStore.getState().phase;
     if (currentPhase === 'listening') {
       audioRecorder.stop();
+      useConversationStore.getState().setPhase('processing');
       sendMessage({ type: 'audio_end' });
     }
   }, [audioRecorder, sendMessage]);
