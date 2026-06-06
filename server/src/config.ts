@@ -9,8 +9,8 @@ export const config = {
   deepgram: {
     apiKey: process.env.DEEPGRAM_API_KEY || '',
   },
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
+  deepseek: {
+    apiKey: process.env.DEEPSEEK_API_KEY || '',
   },
   elevenlabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || '',

@@ -59,8 +59,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         break;
 
       case 'ai_response_start':
+        if (msg.text) {
+          get().addMessage('ai', msg.text);
+        }
         set({ phase: 'speaking' });
-        // Text will be added on ai_response_end
         break;
 
       case 'ai_response_end':

@@ -138,7 +138,7 @@ export type WsClientMessage =
   | { type: 'ping' };
 
 export type WsServerMessage =
-  | { type: 'connected'; sessionId: string; scenario: Scenario }
+  | { type: 'connected'; sessionId: string; scenario: { id: string; slug: string; title: string; icon: string } | null }
   | { type: 'interim_transcript'; text: string; confidence: number }
   | { type: 'final_transcript'; text: string; confidence: number }
   | { type: 'ai_response_start'; text: string }
