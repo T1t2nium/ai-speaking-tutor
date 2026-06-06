@@ -9,24 +9,33 @@ export async function wsHandler(socket: WsType, req: FastifyRequest) {
   const { sessionId } = req.params as { sessionId: string };
   logger.info(`WebSocket connected for session: ${sessionId}`);
 
-  // Create STT stream for this session
-  const stt = createSTTStream((text, confidence, isFinal) => {
-    if (socket.readyState !== WebSocket.OPEN) return;
+  // Create STT stream for this session.
+  // onClosed: Deepgram has finished → send ai_response_end so client leaves Processing state
+  const stt = createSTTStream(
+    (text, confidence, isFinal) => {
+      if (socket.readyState !== WebSocket.OPEN) return;
 
-    if (isFinal) {
-      socket.send(JSON.stringify({
-        type: 'final_transcript',
-        text,
-        confidence,
-      }));
-    } else {
-      socket.send(JSON.stringify({
-        type: 'interim_transcript',
-        text,
-        confidence,
-      }));
-    }
-  });
+      if (isFinal) {
+        socket.send(JSON.stringify({
+          type: 'final_transcript',
+          text,
+          confidence,
+        }));
+      } else {
+        socket.send(JSON.stringify({
+          type: 'interim_transcript',
+          text,
+          confidence,
+        }));
+      }
+    },
+    () => {
+      // Deepgram connection closed → tell client pipeline is done
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'ai_response_end' }));
+      }
+    },
+  );
 
   socket.send(JSON.stringify({
     type: 'connected',
@@ -47,8 +56,8 @@ export async function wsHandler(socket: WsType, req: FastifyRequest) {
 
       switch (msg.type) {
         case 'audio_end':
-          stt.close();
-          // TODO: Trigger LLM → TTS pipeline (Phase 2-3)
+          stt.finalize();
+          // Phase 2-3: after STT finalizes, onClosed will trigger LLM → TTS
           break;
         case 'interrupt':
           // TODO: Abort LLM + TTS (Phase 4)

@@ -6,14 +6,16 @@ type TranscriptCallback = (text: string, confidence: number, isFinal: boolean) =
 
 interface STTStream {
   sendAudio: (chunk: Buffer) => void;
+  /** Gracefully end the stream — sends CloseStream, waits for final results */
+  finalize: () => void;
+  /** Abrupt cleanup on disconnect/error */
   close: () => void;
 }
 
-/**
- * Creates a streaming STT connection to Deepgram using their WebSocket API.
- * Audio is sent as binary Opus frames; transcripts arrive as JSON.
- */
-export function createSTTStream(onTranscript: TranscriptCallback): STTStream {
+export function createSTTStream(
+  onTranscript: TranscriptCallback,
+  onClosed?: () => void,
+): STTStream {
   const url =
     `wss://api.deepgram.com/v1/listen` +
     `?model=nova-2` +
@@ -31,6 +33,7 @@ export function createSTTStream(onTranscript: TranscriptCallback): STTStream {
   });
 
   let isOpen = false;
+  let finalized = false;
 
   ws.on('open', () => {
     isOpen = true;
@@ -53,17 +56,27 @@ export function createSTTStream(onTranscript: TranscriptCallback): STTStream {
   ws.on('close', () => {
     isOpen = false;
     logger.info('Deepgram WebSocket closed');
+    onClosed?.();
   });
 
   ws.on('error', (err: Error) => {
     logger.error('Deepgram WebSocket error:', err.message);
     isOpen = false;
+    onClosed?.();
   });
 
   return {
     sendAudio(chunk: Buffer) {
       if (isOpen) {
         ws.send(chunk);
+      }
+    },
+    finalize() {
+      if (isOpen && !finalized) {
+        finalized = true;
+        // Send CloseStream to let Deepgram send final transcript before closing
+        ws.send(JSON.stringify({ type: 'CloseStream' }));
+        logger.info('Deepgram CloseStream sent');
       }
     },
     close() {
