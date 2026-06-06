@@ -24,55 +24,68 @@ export function useWebSocket({
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onTextMessage);
-  const mountedRef = useRef(true);
+  const cancelledRef = useRef(false);
+  const reconnectCountRef = useRef(0);
 
-  // Keep callback ref in sync
   onMessageRef.current = onTextMessage;
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
 
-    setStatus('connecting');
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/session/${sessionId}`);
-    wsRef.current = ws;
-    ws.binaryType = 'arraybuffer';
+    cancelledRef.current = false;
+    reconnectCountRef.current = 0;
 
-    ws.onopen = () => {
-      if (mountedRef.current) setStatus('connected');
-    };
+    function connect() {
+      if (cancelledRef.current) return;
 
-    ws.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) return;
-      try {
-        const msg: WsServerMessage = JSON.parse(event.data);
-        onMessageRef.current?.(msg);
-      } catch {
-        // Ignore unparseable messages
-      }
-    };
+      setStatus('connecting');
+      const url = `${WS_BASE_URL}/ws/session/${sessionId}`;
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+      ws.binaryType = 'arraybuffer';
 
-    ws.onclose = () => {
-      if (mountedRef.current) setStatus('disconnected');
-      wsRef.current = null;
-    };
+      ws.onopen = () => {
+        if (!cancelledRef.current) {
+          setStatus('connected');
+          reconnectCountRef.current = 0;
+        }
+      };
 
-    ws.onerror = () => {
-      // Only close if the WS is still connecting — if already open, let onclose handle it
-      if (ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-    };
+      ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) return;
+        try {
+          const msg: WsServerMessage = JSON.parse(event.data);
+          onMessageRef.current?.(msg);
+        } catch {
+          // Ignore
+        }
+      };
+
+      ws.onclose = () => {
+        if (!cancelledRef.current) {
+          setStatus('disconnected');
+          // Auto-reconnect up to 3 times
+          if (reconnectCountRef.current < 3) {
+            reconnectCountRef.current++;
+            setTimeout(connect, 1000 * reconnectCountRef.current);
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        // Browser handles cleanup on error — don't call close() here
+      };
+    }
+
+    connect();
 
     return () => {
-      // Avoid closing if already CLOSED/CLOSING (React Strict Mode double-mount)
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
+      cancelledRef.current = true;
+      // Only close if already open (not during connecting, avoids Strict Mode noise)
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.close(1000);
       }
+      wsRef.current = null;
     };
   }, [sessionId]);
 
