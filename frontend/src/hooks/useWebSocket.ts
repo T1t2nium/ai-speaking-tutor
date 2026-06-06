@@ -35,6 +35,12 @@ export function useWebSocket({
     cancelledRef.current = false;
     reconnectCountRef.current = 0;
 
+    // Close any existing connection before creating a new one
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     function connect() {
       if (cancelledRef.current) return;
 
@@ -52,6 +58,7 @@ export function useWebSocket({
       };
 
       ws.onmessage = (event) => {
+        if (cancelledRef.current) return;
         if (event.data instanceof ArrayBuffer) return;
         try {
           const msg: WsServerMessage = JSON.parse(event.data);
@@ -64,7 +71,6 @@ export function useWebSocket({
       ws.onclose = () => {
         if (!cancelledRef.current) {
           setStatus('disconnected');
-          // Auto-reconnect up to 3 times
           if (reconnectCountRef.current < 3) {
             reconnectCountRef.current++;
             setTimeout(connect, 1000 * reconnectCountRef.current);
@@ -73,7 +79,7 @@ export function useWebSocket({
       };
 
       ws.onerror = () => {
-        // Browser handles cleanup on error — don't call close() here
+        // Browser handles cleanup on error
       };
     }
 
@@ -81,10 +87,8 @@ export function useWebSocket({
 
     return () => {
       cancelledRef.current = true;
-      // Only close if already open (not during connecting, avoids Strict Mode noise)
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.close(1000);
-      }
+      // Always close, even if CONNECTING — prevents ghost connections
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, [sessionId]);
