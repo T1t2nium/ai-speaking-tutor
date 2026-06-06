@@ -1,57 +1,80 @@
-import { FastifyRequest } from 'fastify';
-import { WebSocket } from 'ws';
-import { WsClientMessage } from '@tutor/shared';
+import type { FastifyRequest } from 'fastify';
+import type { WebSocket as WsType } from 'ws';
+import type { WsClientMessage } from '@tutor/shared';
+import WebSocket from 'ws';
 import { logger } from '../utils/logger';
+import { createSTTStream } from '../services/stt';
 
-export async function wsHandler(socket: WebSocket, req: FastifyRequest) {
+export async function wsHandler(socket: WsType, req: FastifyRequest) {
   const { sessionId } = req.params as { sessionId: string };
   logger.info(`WebSocket connected for session: ${sessionId}`);
+
+  // Create STT stream for this session
+  const stt = createSTTStream((text, confidence, isFinal) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+
+    if (isFinal) {
+      socket.send(JSON.stringify({
+        type: 'final_transcript',
+        text,
+        confidence,
+      }));
+    } else {
+      socket.send(JSON.stringify({
+        type: 'interim_transcript',
+        text,
+        confidence,
+      }));
+    }
+  });
 
   socket.send(JSON.stringify({
     type: 'connected',
     sessionId,
-    scenario: null, // Will be populated when session lookup is implemented
+    scenario: null,
   }));
 
-  socket.on('message', (raw) => {
-    // Binary frames are audio data; text frames are JSON control messages
-    if (raw instanceof Buffer) {
-      // Audio chunk received — will be piped to Deepgram STT
-      // TODO: Implement audio pipeline
+  socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[]) => {
+    // Binary frames: audio data → forward to Deepgram STT
+    if (Buffer.isBuffer(raw)) {
+      stt.sendAudio(raw);
       return;
     }
 
+    // Text frames: JSON control messages
     try {
       const msg: WsClientMessage = JSON.parse(raw.toString());
-      logger.debug(`WS message: ${msg.type}`);
 
       switch (msg.type) {
         case 'audio_end':
-          // TODO: Finalize STT, trigger LLM, send TTS back
+          stt.close();
+          // TODO: Trigger LLM → TTS pipeline (Phase 2-3)
           break;
         case 'interrupt':
-          // TODO: Abort current LLM + TTS
+          // TODO: Abort LLM + TTS (Phase 4)
           break;
         case 'ping':
           socket.send(JSON.stringify({ type: 'pong' }));
           break;
         case 'end_session':
-          // TODO: Close session, trigger evaluation
-          break;
-        case 'config':
-          // TODO: Update VAD config for this session
+          stt.close();
+          socket.send(JSON.stringify({
+            type: 'ai_response_end',
+          }));
           break;
       }
     } catch {
-      // Ignore malformed messages
+      // Ignore malformed JSON
     }
   });
 
   socket.on('close', () => {
+    stt.close();
     logger.info(`WebSocket disconnected for session: ${sessionId}`);
   });
 
-  socket.on('error', (err) => {
+  socket.on('error', (err: Error) => {
+    stt.close();
     logger.error(`WebSocket error for session ${sessionId}:`, err);
   });
 }

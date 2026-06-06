@@ -15,12 +15,12 @@
 - [x] Create WebSocket handler on server
 - [x] Create basic conversation page (session/[id]/page.tsx)
 - [x] Verify server starts and frontend builds
-- [ ] Implement useAudioRecorder hook
-- [ ] Implement useAudioPlayback hook
-- [ ] Implement useWebSocket hook
-- [ ] Connect WS handler to Deepgram STT
-- [ ] Wire up mic button → transcript display flow
-- [ ] Verify end-to-end audio pipeline
+- [x] Implement useAudioRecorder hook
+- [x] Implement useAudioPlayback hook
+- [x] Implement useWebSocket hook
+- [x] Connect WS handler to Deepgram STT
+- [x] Wire up mic button → transcript display flow
+- [ ] Verify end-to-end audio pipeline (needs browser testing)
 
 ## Backlog
 

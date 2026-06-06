@@ -1,0 +1,1 @@
+export { createSTTStream } from './stt';

@@ -10,18 +10,20 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "fastify": "^4.28.0",
-    "@fastify/websocket": "^10.0.0",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@deepgram/sdk": "^5.3.0",
     "@fastify/cors": "^9.0.0",
     "@fastify/rate-limit": "^9.0.0",
-    "@anthropic-ai/sdk": "^0.30.0",
+    "@fastify/websocket": "^10.0.0",
+    "@tutor/shared": "*",
     "dotenv": "^16.4.0",
+    "fastify": "^4.28.0",
     "pino": "^9.1.0",
-    "pino-pretty": "^11.1.0",
-    "@tutor/shared": "*"
+    "pino-pretty": "^11.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.11.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
