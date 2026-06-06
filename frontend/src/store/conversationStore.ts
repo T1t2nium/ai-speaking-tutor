@@ -54,8 +54,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         break;
 
       case 'final_transcript':
+        // Deepgram auto-finalized an utterance — add message, keep listening
         get().addMessage('user', msg.text);
-        set({ interimTranscript: '', phase: 'processing' });
+        set({ interimTranscript: '' });
+        // Phase stays as 'listening' — user may speak more
         break;
 
       case 'ai_response_start':
