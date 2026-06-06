@@ -23,26 +23,27 @@ export function useWebSocket({
 }: UseWebSocketOptions): UseWebSocketReturn {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const onMessageRef = useRef(onTextMessage);
 
-  const connect = useCallback(() => {
+  // Keep callback ref in sync without triggering reconnection
+  onMessageRef.current = onTextMessage;
+
+  // Connect only when sessionId changes, NOT when callback changes
+  useEffect(() => {
     if (!sessionId) return;
 
     setStatus('connecting');
     const ws = new WebSocket(`${WS_BASE_URL}/ws/session/${sessionId}`);
     wsRef.current = ws;
-
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => setStatus('connected');
 
     ws.onmessage = (event) => {
-      // Binary frames (audio) are handled separately by the caller
       if (event.data instanceof ArrayBuffer) return;
-
       try {
         const msg: WsServerMessage = JSON.parse(event.data);
-        onTextMessage?.(msg);
+        onMessageRef.current?.(msg);
       } catch {
         // Ignore unparseable messages
       }
@@ -56,16 +57,11 @@ export function useWebSocket({
     ws.onerror = () => {
       ws.close();
     };
-  }, [sessionId, onTextMessage]);
 
-  // Auto-connect when sessionId is available
-  useEffect(() => {
-    connect();
     return () => {
-      clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      ws.close();
     };
-  }, [connect]);
+  }, [sessionId]); // Only reconnect when sessionId changes
 
   const sendAudio = useCallback((chunk: ArrayBuffer) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
