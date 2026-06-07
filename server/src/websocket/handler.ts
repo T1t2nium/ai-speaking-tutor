@@ -81,8 +81,12 @@ export async function wsHandler(socket: WsType, req: FastifyRequest) {
   }
 
   function getOrCreateSTT(): STTStream {
-    if (!stt) {
-      logger.info('Creating new Deepgram STT stream...');
+    if (!stt || !stt.isConnected()) {
+      if (stt) {
+        logger.info('STT disconnected, creating replacement...');
+      } else {
+        logger.info('Creating new Deepgram STT stream...');
+      }
       stt = createSTTStream(
         (text, _confidence, isFinal) => {
           if (socket.readyState !== WebSocket.OPEN) return;
