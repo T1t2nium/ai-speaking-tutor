@@ -3,6 +3,9 @@ import { Pool } from 'pg';
 import { config } from '../config';
 import * as schema from './schema';
 
-const pool = new Pool({ connectionString: config.databaseUrl });
+const pool = new Pool({
+  connectionString: config.databaseUrl,
+  ssl: { rejectUnauthorized: false }, // Supabase pooler uses self-signed certs
+});
 
 export const db = drizzle(pool, { schema });
