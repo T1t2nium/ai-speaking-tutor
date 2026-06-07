@@ -25,21 +25,23 @@
 - [x] STT lazy creation + audio buffering
 - [x] End-to-end verified: speak → transcript → AI response
 
-## In Progress
-
 ### Phase 3: Full Voice Conversation Loop ✅
 - [x] ElevenLabs TTS integration (streaming REST API, MP3 output)
 - [x] Audio pipeline: STT → LLM → TTS → playback
 - [x] Binary audio frames client → accumulate → decode → play
+- [x] Browser speechSynthesis TTS fallback
 - [x] End-to-end voice-in voice-out conversation
 
-## In Progress
-
-### Phase 4: VAD & Natural Turn-Taking
-- [ ] Silero VAD model (ONNX in-browser)
-- [ ] Auto speech-end detection
-- [ ] Interruption handling (user cuts off AI)
-- [ ] VAD sensitivity config
+### Phase 4: VAD & Natural Turn-Taking ✅
+- [x] RMS energy-based VAD (zero-dependency, hysteresis thresholds)
+- [x] Auto speech-end detection (1200ms silence, forgiving for learners)
+- [x] Silence progress indicator in UI
+- [x] Dual input modes: long-press (push-to-talk) + single-tap (VAD auto)
+- [x] Interruption support (server AbortController, client interrupt message)
+- [x] Continuous mic mode (no per-turn create/destroy)
+- [x] Transcript merging (fragmented speech → one message)
+- [x] LLM failure recovery (auto-resume listening)
+- [x] DeepSeek v4-flash model + retry logic (5 attempts, exponential backoff)
 
 ### Phase 5: Corrections & Evaluation
 - [ ] Speechace pronunciation API
@@ -63,4 +65,4 @@
 
 ---
 
-Last updated: 2026-06-06
+Last updated: 2026-06-07

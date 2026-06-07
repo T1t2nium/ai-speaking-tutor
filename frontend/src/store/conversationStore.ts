@@ -54,10 +54,17 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         break;
 
       case 'final_transcript':
-        // Deepgram auto-finalized an utterance — add message, keep listening
-        get().addMessage('user', msg.text);
-        set({ interimTranscript: '' });
-        // Phase stays as 'listening' — user may speak more
+        // Append to last user message if one exists (merge fragmented transcripts)
+        set((state) => {
+          const msgs = [...state.messages];
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'user') {
+            msgs[msgs.length - 1] = { role: 'user', content: last.content + ' ' + msg.text };
+          } else {
+            msgs.push({ role: 'user', content: msg.text });
+          }
+          return { messages: msgs, interimTranscript: '' };
+        });
         break;
 
       case 'ai_response_start':

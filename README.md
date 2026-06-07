@@ -37,6 +37,7 @@ cp .env.example .env
 # Start development
 npm run dev:server    # Terminal 1: Backend on :3001
 npm run dev:frontend  # Terminal 2: Frontend on :3000
+# npx kill-port 3001
 ```
 
 ## Project Structure
