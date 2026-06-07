@@ -52,12 +52,15 @@
 - [x] Evaluation panel UI (score gauges, error lists, vocabulary, recommendations)
 - [x] Shared types: evaluation_result message, correction messageIndex
 
-### Phase 6: Persistence & Authentication
-- [ ] Supabase project setup + Drizzle ORM migrations
-- [ ] Auth pages (signup, login, OAuth)
-- [ ] JWT middleware for backend
-- [ ] Session/message/evaluation persistence
-- [ ] Progress dashboard (history, trends, vocabulary)
+### Phase 6: Persistence & Authentication ✅
+- [x] PostgreSQL database + Drizzle ORM schema (users, sessions, messages, evaluations)
+- [x] Custom JWT authentication (register, login, token verify)
+- [x] Auth pages (login, register) + protected routes
+- [x] JWT middleware for backend REST API
+- [x] Session/message/evaluation persistence (fire-and-forget during conversation)
+- [x] Session detail page with transcript + evaluation replay
+- [x] Progress dashboard (stats, recent sessions, scenarios practiced)
+- [x] WebSocket JWT auth via query parameter
 
 ### Phase 7: Polish & Production Readiness
 - [ ] Responsive design (tablet + mobile)
@@ -68,4 +71,4 @@
 
 ---
 
-Last updated: 2026-06-07 (Phase 5 complete)
+Last updated: 2026-06-07 (Phase 6 complete)

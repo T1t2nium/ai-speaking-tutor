@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-06-07 — Phase 6: Persistence & Authentication
+
+### Created
+- `server/src/db/schema.ts` — Drizzle ORM schema (users, sessions, messages, evaluations tables)
+- `server/src/db/connection.ts` — PostgreSQL pool + Drizzle client
+- `server/drizzle.config.ts` — Drizzle Kit configuration
+- `server/src/services/auth.ts` — Password hashing (bcrypt), JWT sign/verify, register/login
+- `server/src/middleware/auth.ts` — Fastify preHandler JWT auth middleware
+- `server/src/services/sessionStore.ts` — Session/message/evaluation CRUD, user progress queries
+- `frontend/src/store/authStore.ts` — Zustand auth store (login/register/logout/checkAuth)
+- `frontend/src/app/login/page.tsx` — Login page
+- `frontend/src/app/register/page.tsx` — Registration page
+- `frontend/src/app/AuthNav.tsx` — Auth-aware navigation component
+- `frontend/src/app/dashboard/page.tsx` — Dashboard (stats, recent sessions, scenarios practiced)
+- `frontend/src/app/dashboard/[id]/page.tsx` — Session detail (transcript + evaluation replay)
+
+### Modified
+- `server/package.json` — Added drizzle-orm, pg, jsonwebtoken, bcryptjs, drizzle-kit
+- `server/src/config.ts` — Added databaseUrl, jwtSecret
+- `server/src/app.ts` — Auth routes (register/login/me), session CRUD routes, user progress route
+- `server/src/websocket/handler.ts` — JWT auth on connect, DB-backed scenario lookup, fire-and-forget message/evaluation persistence
+- `frontend/package.json` — No new deps (all auth via built-in fetch)
+- `frontend/src/app/layout.tsx` — AuthNav replacing static nav
+- `frontend/src/app/page.tsx` — Auth gate, POST /api/sessions to create session before redirect
+- `frontend/src/app/session/[id]/page.tsx` — Auth redirect, REST-loaded scenario, UUID-based routing
+- `frontend/src/hooks/useWebSocket.ts` — Token in WS URL query parameter
+- `frontend/src/store/conversationStore.ts` — Store scenario from connected message
+- `.env.example` — Added DATABASE_URL, JWT_SECRET
+
+### Key Features
+- Custom JWT authentication (register, login, token verification, 7d expiry)
+- PostgreSQL persistence via Drizzle ORM (users, sessions, messages, evaluations)
+- Auth-first flow: login/register required before starting a scenario
+- Session created via REST API, then voice conversation via WebSocket
+- Messages persisted fire-and-forget during conversation
+- Evaluation persisted at session end
+- Dashboard with session history, stats, and progress data
+- Session detail page with full transcript and evaluation replay
+- Auth-aware navigation (login/register links or user menu)
+
+### Verified
+- `npm run build` passes (server + frontend)
+- Server TypeScript compiles with strict mode
+- Frontend TypeScript compiles with strict mode
+
+---
+
 ## 2026-06-07 — Phase 5: Corrections & Evaluation
 
 ### Created

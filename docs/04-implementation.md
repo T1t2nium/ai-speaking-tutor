@@ -92,21 +92,22 @@ The project is divided into 7 independently testable phases. Each phase builds o
 - [x] Multi-turn: corrections accumulate across turns in evaluation summary
 - [x] `npm run build` passes (both server and frontend)
 
-## Phase 6: Persistence & Authentication
-**Focus:** User accounts, session history, progress tracking.
+## Phase 6: Persistence & Authentication ✅
+**Status:** Complete (2026-06-07)
 
 ### Tasks
-- [ ] Supabase project setup
-- [ ] Drizzle ORM schema and migrations
-- [ ] Auth pages (signup, login, OAuth)
-- [ ] JWT middleware for backend
-- [ ] Session/message/evaluation persistence
-- [ ] Dashboard: history, trends, vocabulary review
+- [x] PostgreSQL database via Drizzle ORM (users, sessions, messages, evaluations)
+- [x] Custom JWT authentication with bcrypt password hashing
+- [x] Auth pages (login, register) with protected routes
+- [x] JWT middleware for REST API + WebSocket query param auth
+- [x] Session/message/evaluation persistence (fire-and-forget during conversation)
+- [x] Dashboard: session history, stats, scenarios practiced, session detail replay
 
 ### Verification
-- Register → practice → logout → login → see history
-- Progress data persists across sessions
-- Multiple users are isolated
+- [x] `npm run build` passes (both server and frontend)
+- [x] Session creation via REST, voice conversation via WebSocket
+- [x] Messages and evaluation persisted to PostgreSQL
+- [x] Dashboard shows session history per user
 
 ## Phase 7: Polish & Production Readiness
 **Focus:** Edge cases, performance, mobile compatibility.

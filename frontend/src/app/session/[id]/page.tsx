@@ -1,16 +1,44 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { getScenarioById } from '@tutor/shared/scenarios';
-import type { Correction } from '@tutor/shared';
+import type { Correction, Scenario } from '@tutor/shared';
 import { useConversation } from '@/hooks/useConversation';
 import { useConversationStore } from '@/store/conversationStore';
+import { useAuthStore } from '@/store/authStore';
+import { API_BASE_URL } from '@/lib/constants';
 import { EvaluationPanel } from './EvaluationPanel';
 
 export default function SessionPage() {
   const params = useParams();
-  const scenario = getScenarioById(params.id as string);
+  const router = useRouter();
+  const sessionId = params.id as string;
+
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const token = useAuthStore((s) => s.token);
+
+  const [scenario, setScenario] = useState<Scenario | null>(null);
+  const [loadingScenario, setLoadingScenario] = useState(true);
+
+  // Load scenario info from REST API (session UUID → scenarioId → scenario)
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+    fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Session not found');
+        return res.json();
+      })
+      .then((data) => {
+        const sc = getScenarioById(data.session.scenarioId);
+        setScenario(sc || null);
+      })
+      .catch(() => setScenario(null))
+      .finally(() => setLoadingScenario(false));
+  }, [sessionId, isAuthenticated, token]);
 
   const {
     phase,
@@ -23,7 +51,7 @@ export default function SessionPage() {
     startRecording,
     stopRecording,
     endSession,
-  } = useConversation(params.id as string);
+  } = useConversation(sessionId);
 
   const evaluation = useConversationStore((s) => s.evaluation);
   const correctionMap = useConversationStore((s) => s.correctionMap);
@@ -37,16 +65,36 @@ export default function SessionPage() {
     }
   };
 
-  if (!scenario) {
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  if (isLoading || loadingScenario) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-12 text-center">
-        <p className="text-slate-500">Scenario not found.</p>
+        <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-slate-500 mt-4">Loading session...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) return null;
+
+  if (!scenario && !loadingScenario) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-12 text-center">
+        <p className="text-slate-500">Session not found.</p>
         <a href="/" className="text-primary-600 hover:underline mt-4 inline-block">
-          Back to scenarios
+          Back to home
         </a>
       </div>
     );
   }
+
+  if (!scenario) return null;
 
   const phaseLabel: Record<string, string> = {
     idle: 'Tap to Speak',
@@ -185,8 +233,7 @@ export default function SessionPage() {
         <EvaluationPanel
           evaluation={evaluation}
           onStartNew={() => {
-            endSession();
-            window.location.href = '/';
+            router.push('/');
           }}
         />
       )}

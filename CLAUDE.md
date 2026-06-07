@@ -6,7 +6,7 @@ An AI-powered English speaking tutor web application. Users practice spoken Engl
 
 **Tech stack:** Next.js 14 (frontend), Fastify/Node.js (backend), TypeScript throughout, WebSocket for real-time audio, Deepgram STT, DeepSeek LLM, ElevenLabs TTS, Speechace pronunciation, Supabase PostgreSQL + Auth.
 
-**Status:** Phase 1-5 complete. Moving to Phase 6 — Persistence & Authentication.
+**Status:** Phase 1-6 complete. Moving to Phase 7 — Polish & Production Readiness.
 
 ## Documentation Map
 
@@ -89,7 +89,7 @@ Follow `.claude/rules/rule1.md` for general behavioral guidelines:
 
 Work through phases sequentially. Each phase has a clear testable outcome defined in `docs/04-implementation.md`. Don't jump ahead — completing the current phase before starting the next ensures stable, incremental progress.
 
-Current phase: **Phase 5 — Corrections & Evaluation** (complete). Next: **Phase 6 — Persistence & Authentication**
+Current phase: **Phase 6 — Persistence & Authentication** (complete). Next: **Phase 7 — Polish & Production Readiness**
 
 ## 代码审查规则规范 (Code Contribution & PR Rules)
 

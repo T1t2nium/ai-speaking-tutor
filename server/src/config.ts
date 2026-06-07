@@ -24,4 +24,6 @@ export const config = {
     anonKey: process.env.SUPABASE_ANON_KEY || '',
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   },
+  databaseUrl: process.env.DATABASE_URL || 'postgresql://localhost:5432/tutor',
+  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
 } as const;
