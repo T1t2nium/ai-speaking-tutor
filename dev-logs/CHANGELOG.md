@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-06-07 — Phase 5: Corrections & Evaluation
+
+### Created
+- `server/src/services/pronunciation.ts` — Speechace API integration, PCM→WAV conversion, phoneme-level error parsing
+- `server/src/services/evaluation.ts` — Per-turn grammar analysis via DeepSeek, post-session evaluation generation
+- `frontend/src/app/session/[id]/EvaluationPanel.tsx` — Score gauges, error lists, vocabulary, recommendations
+
+### Modified
+- `shared/types.ts` — Added `evaluation_result` WS message type, `messageIndex` in correction message
+- `server/src/websocket/handler.ts` — Audio buffering per turn, fire-and-forget grammar analysis, end-session evaluation pipeline
+- `frontend/src/store/conversationStore.ts` — Added evaluation/correctionMap state, handle correction and evaluation_result messages
+- `frontend/src/app/session/[id]/page.tsx` — Inline correction annotations in user message bubbles, evaluation panel integration
+- `frontend/src/hooks/useConversation.ts` — Simplified to single tap-to-toggle (removed VAD auto + long-press PTT)
+- `frontend/src/hooks/useAudioRecorder.ts` — Mic stream reuse across turns (create once, pause/resume)
+- `frontend/src/lib/audio.ts` — Separated `stop()` (pause+flush) from `close()` (teardown)
+- `shared/scenarios.ts` — Updated system prompts to include grammar correction instructions
+
+### Key Features
+- Per-turn grammar corrections displayed inline below user messages (strikethrough + corrected + expandable explanation)
+- Fire-and-forget grammar analysis runs in parallel with AI response (no latency impact)
+- Pronunciation evaluation at session end via Speechace (phoneme-level, PCM→WAV conversion)
+- Post-session evaluation panel with SVG score gauges, error lists, vocabulary, and AI-generated recommendations
+- Graceful degradation: all external API failures return empty/safe defaults
+- Simplified interaction: single tap-to-toggle recording (no VAD or push-to-talk complexity)
+
+### Verified
+- `npm run build` passes
+- Multi-turn grammar correction delivery
+- End-session evaluation pipeline produces scores, summary, and recommendations
+
+---
+
 ## 2026-06-07 — Phase 4: VAD & Natural Turn-Taking
 
 ### Created

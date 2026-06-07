@@ -12,7 +12,7 @@ export const scenarios: Scenario[] = [
 - Ask about dietary preferences and make recommendations.
 - Confirm the order, mention wait times, and handle the bill.
 - Keep responses short and natural (1-3 sentences).
-- If the user makes a grammar or vocabulary mistake, gently model the correct form in your next response (do NOT explicitly point out the error unless it causes misunderstanding).
+- If the user makes a grammar or vocabulary mistake, briefly point it out with the correction (e.g., "Note: 'she go' should be 'she goes'"). Do this at the END of your response, clearly separated.
 - Use simple, everyday English appropriate for an intermediate learner.
 - Encourage the user to express preferences and ask questions.`,
     scenarioHint: 'You are at a restaurant. The waiter/waitress is ready to take your order. Feel free to ask about the menu, make special requests, or ask for recommendations.',
@@ -31,6 +31,7 @@ export const scenarios: Scenario[] = [
 - Follow up on the user's answers with relevant questions.
 - Maintain a professional but encouraging tone.
 - After each response, give brief, constructive feedback on communication style if the user struggles with clarity or expression.
+- If the user makes a grammar mistake, briefly point it out with the correction at the end of your response (e.g., "Note: 'she don't' should be 'she doesn't'").
 - Use standard professional English. Explain unfamiliar terms if the user seems confused.
 - At the end, summarize strengths and suggest one area to work on.`,
     scenarioHint: 'You are in a job interview for a position you want. Answer the interviewer\'s questions professionally and try to express your thoughts clearly.',
@@ -49,6 +50,7 @@ export const scenarios: Scenario[] = [
 - Use natural, casual English with common travel vocabulary.
 - If the user seems lost or confused, offer simpler alternatives.
 - Model polite phrases (excuse me, could you tell me, I'd like to, etc.).
+- If the user makes a grammar mistake, briefly point it out with the correction at the end of your response.
 - Keep the conversation moving — after 2-3 turns on one topic, naturally transition to the next travel need.`,
     scenarioHint: 'You are traveling in an English-speaking country. You may need directions, hotel check-in, transportation tickets, or sightseeing advice. Ask naturally as you would in real life.',
     icon: '✈️',
@@ -67,6 +69,7 @@ export const scenarios: Scenario[] = [
 - Match the user's language level. If they use simple sentences, keep your responses similarly simple.
 - If the user pauses or struggles, offer a gentle prompt or rephrase the question.
 - Occasionally introduce one new vocabulary word naturally in context.
+- If the user makes a grammar mistake, briefly point it out with the correction at the end of your response.
 - Keep the tone warm and encouraging. This is practice, not a test.`,
     scenarioHint: 'Chat naturally with a friendly conversation partner. Talk about your interests, daily life, or anything on your mind. No pressure — just practice speaking English.',
     icon: '💬',

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import type { WebSocket as WsType } from 'ws';
-import type { WsClientMessage } from '@tutor/shared';
+import type { WsClientMessage, Correction, PronunciationError, ConversationTurn } from '@tutor/shared';
 import { getScenarioById } from '@tutor/shared/scenarios';
 import WebSocket from 'ws';
 import { config } from '../config';
@@ -8,10 +8,19 @@ import { logger } from '../utils/logger';
 import { createSTTStream, STTStream } from '../services/stt';
 import { streamChat } from '../services/llm';
 import { streamTTS } from '../services/tts';
+import { evaluatePronunciation } from '../services/pronunciation';
+import { analyzeGrammar, generateEvaluation } from '../services/evaluation';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+}
+
+interface TurnData {
+  transcript: string;
+  audioBuffer: Buffer;
+  corrections?: Correction[];
+  pronunciationErrors?: PronunciationError[];
 }
 
 export function wsHandler(socket: WsType, req: FastifyRequest) {
@@ -29,6 +38,12 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
   let llmController: AbortController | null = null;
   let ttsController: AbortController | null = null;
   const pendingTranscripts: string[] = [];
+
+  // Phase 5 state
+  const audioBuffers: Buffer[] = [];
+  const turns: TurnData[] = [];
+  let userMessageCount = 0;
+  let evaluating = false;
 
   function abortGeneration() {
     if (llmController) {
@@ -53,7 +68,6 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
             socket.send(JSON.stringify({ type: 'interim_transcript', text, confidence: _confidence }));
           }
         },
-        // onClosed — just cleanup, nothing else
         () => {
           logger.info('STT disconnected');
           stt = null;
@@ -63,7 +77,7 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     return stt;
   }
 
-  async function generateResponse() {
+  async function generateResponse(userTranscript?: string, turnIdx?: number) {
     if (generating) return;
     generating = true;
 
@@ -109,6 +123,25 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
     history.push({ role: 'assistant', content: aiText });
     socket.send(JSON.stringify({ type: 'ai_response_start', text: aiText }));
 
+    // Run grammar analysis sequentially AFTER LLM (avoids concurrent DeepSeek requests)
+    if (userTranscript && turnIdx !== undefined && socket.readyState === WebSocket.OPEN) {
+      analyzeGrammar(userTranscript, scenario?.title || '', undefined)
+        .then((corrections) => {
+          if (corrections.length > 0 && socket.readyState === WebSocket.OPEN) {
+            const turn = turns[turnIdx];
+            if (turn) turn.corrections = corrections;
+            for (const c of corrections) {
+              socket.send(JSON.stringify({
+                type: 'correction',
+                messageIndex: turnIdx,
+                ...c,
+              }));
+            }
+          }
+        })
+        .catch((err) => logger.error('Grammar analysis error:', err));
+    }
+
     // Stream TTS audio
     try {
       ttsController = new AbortController();
@@ -151,7 +184,9 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
   socket.on('message', async (raw, isBinary) => {
     // Binary frames = audio data, text frames = JSON control messages
     if (isBinary) {
-      getOrCreateSTT().sendAudio(Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer));
+      const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+      getOrCreateSTT().sendAudio(buf);
+      audioBuffers.push(buf);
       return;
     }
 
@@ -159,31 +194,61 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
       const msg: WsClientMessage = JSON.parse(raw.toString());
 
       switch (msg.type) {
-        case 'audio_end':
-          logger.info(`audio_end received, stt=${!!stt}`);
+        case 'audio_end': {
+          logger.info(`audio_end received, stt=${!!stt}, pendingTranscripts=${pendingTranscripts.length}, userMsgs=${history.filter((m) => m.role === 'user').length}`);
           if (stt) {
             await stt.finalize();
             stt = null;
           }
+
+          // Save current audio buffer for pronunciation eval
+          const turnAudio = Buffer.concat(audioBuffers);
+          audioBuffers.length = 0;
+
+          let newTranscript = false;
+          let lastCombined = '';
+          let lastTurnIdx = -1;
+
           // Merge all pending transcripts into one user message
           if (pendingTranscripts.length > 0) {
             const count = pendingTranscripts.length;
-            const combined = pendingTranscripts.join(' ');
+            // Merge fragments: add ". " between sentences that don't end with punctuation
+            let combined = pendingTranscripts[0];
+            for (let i = 1; i < pendingTranscripts.length; i++) {
+              const prev = combined.trimEnd();
+              const next = pendingTranscripts[i];
+              const sep = /[.!?]$/.test(prev) ? ' ' : '. ';
+              combined = prev + sep + next;
+            }
             history.push({ role: 'user', content: combined });
             pendingTranscripts.length = 0;
-            logger.info(`Merged ${count} transcripts into one user message`);
-          }
-          if (history.filter((m) => m.role === 'user').length > 0) {
-            generateResponse();
+            newTranscript = true;
+            lastCombined = combined;
+            logger.info(`Merged ${count} transcripts: "${combined.slice(0, 80)}"`);
+
+            // Save turn data
+            lastTurnIdx = userMessageCount;
+            userMessageCount++;
+            turns.push({ transcript: combined, audioBuffer: turnAudio });
           } else {
-            // No speech captured — tell client to go back to idle
+            logger.info('No transcript from audio_end — skipping generateResponse');
+          }
+
+          if (newTranscript) {
+            generateResponse(lastCombined, lastTurnIdx);
+          } else {
+            // No new speech captured — tell client to resume listening
+            logger.info('audio_end with no new transcript, sending ai_response_end');
             socket.send(JSON.stringify({ type: 'ai_response_end' }));
           }
           break;
+        }
+
         case 'interrupt':
           logger.info('interrupt received');
           abortGeneration();
           pendingTranscripts.length = 0;
+          audioBuffers.length = 0;
           if (generating) {
             generating = false;
             socket.send(JSON.stringify({ type: 'ai_response_end' }));
@@ -191,14 +256,89 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
           stt?.close();
           stt = null;
           break;
+
         case 'ping':
           socket.send(JSON.stringify({ type: 'pong' }));
           break;
+
         case 'end_session':
+          if (evaluating) break;
+          evaluating = true;
+
           abortGeneration();
           pendingTranscripts.length = 0;
           stt?.close();
-          socket.send(JSON.stringify({ type: 'ai_response_end' }));
+          stt = null;
+
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'ai_response_end' }));
+          }
+
+          logger.info(`Starting evaluation: ${turns.length} turns`);
+
+          try {
+            // Step 1: Pronunciation evaluation for all turns in parallel
+            const pronunciationResults = await Promise.all(
+              turns.map((turn, i) =>
+                evaluatePronunciation(turn.audioBuffer, turn.transcript, sessionId)
+                  .then((errors) => {
+                    turns[i].pronunciationErrors = errors;
+                    return errors;
+                  })
+                  .catch(() => [] as PronunciationError[]),
+              ),
+            );
+            const allPronunciationErrors = pronunciationResults.flat();
+
+            // Step 2: Collect all grammar corrections
+            const allGrammarCorrections = turns
+              .filter((t) => t.corrections)
+              .flatMap((t) => t.corrections!);
+
+            // Step 3: Build ConversationTurn array for evaluation
+            const conversationTurns: ConversationTurn[] = [];
+            let turnIdx = 0;
+            for (const msg of history) {
+              if (msg.role === 'system') continue;
+              if (msg.role === 'user') {
+                const turn = turns[turnIdx];
+                conversationTurns.push({
+                  role: 'user',
+                  content: msg.content,
+                  corrections: turn?.corrections,
+                  pronunciationErrors: turn?.pronunciationErrors,
+                });
+                turnIdx++;
+              } else {
+                conversationTurns.push({ role: 'ai', content: msg.content });
+              }
+            }
+
+            // Step 4: Generate overall evaluation
+            const scores = await generateEvaluation(conversationTurns, allGrammarCorrections);
+
+            // Step 5: Assemble and send full evaluation
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({
+                type: 'evaluation_result',
+                evaluation: {
+                  overallScore: scores.overallScore,
+                  fluencyScore: scores.fluencyScore,
+                  pronunciationScore: scores.pronunciationScore,
+                  grammarAccuracy: scores.grammarAccuracy,
+                  vocabularyRichness: scores.vocabularyRichness,
+                  pronunciationErrors: allPronunciationErrors,
+                  grammarCorrections: allGrammarCorrections,
+                  vocabularyUsed: scores.vocabularyUsed,
+                  summary: scores.summary,
+                  recommendations: scores.recommendations,
+                },
+              }));
+            }
+          } catch (err) {
+            logger.error('Evaluation pipeline error:', err);
+          }
+
           break;
       }
     } catch {

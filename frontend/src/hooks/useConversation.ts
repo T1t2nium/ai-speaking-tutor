@@ -4,15 +4,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAudioRecorder } from './useAudioRecorder';
 import { useAudioPlayback } from './useAudioPlayback';
 import { useWebSocket } from './useWebSocket';
-import { useVAD } from './useVAD';
 import { useConversationStore } from '@/store/conversationStore';
 import type { WsServerMessage } from '@tutor/shared';
 
 /**
- * Master hook — orchestrates mic → VAD → WebSocket → STT → LLM → TTS → playback.
- * Two input modes:
- *   Long press: push-to-talk, release triggers AI, mic stops.
- *   Single tap: VAD auto mode, auto-detects speech end, tap stops mic (no AI).
+ * Simple tap-to-toggle recording:
+ *   Tap → start mic, record continuously.
+ *   Tap again → stop mic, send audio_end, AI responds + corrections.
  */
 export function useConversation(sessionId: string | null) {
   const phase = useConversationStore((s) => s.phase);
@@ -24,8 +22,6 @@ export function useConversation(sessionId: string | null) {
   const audioPlayback = useAudioPlayback();
   const audioChunksRef = useRef<ArrayBuffer[]>([]);
   const lastAiTextRef = useRef('');
-  const practiceActiveRef = useRef(false);
-  const vadEnabledRef = useRef(false);
 
   const speakWithBrowserTTS = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -34,10 +30,7 @@ export function useConversation(sessionId: string | null) {
     utterance.lang = 'en-US';
     utterance.rate = 0.9;
     utterance.onend = () => {
-      if (practiceActiveRef.current) {
-        useConversationStore.getState().setPhase('listening');
-        vadResetRef.current();
-      }
+      useConversationStore.getState().setPhase('idle');
     };
     window.speechSynthesis.speak(utterance);
   }, []);
@@ -65,19 +58,15 @@ export function useConversation(sessionId: string | null) {
         audioPlayback.enqueue(combined.buffer);
         audioPlayback.startPlayback();
         lastAiTextRef.current = '';
-        if (practiceActiveRef.current) {
-          setTimeout(() => {
-            useConversationStore.getState().setPhase('listening');
-            vadResetRef.current();
-          }, 500);
-        }
+        setTimeout(() => {
+          useConversationStore.getState().setPhase('idle');
+        }, 500);
       } else if (lastAiTextRef.current) {
         speakWithBrowserTTS(lastAiTextRef.current);
         lastAiTextRef.current = '';
-      } else if (practiceActiveRef.current) {
+      } else {
         setTimeout(() => {
-          useConversationStore.getState().setPhase('listening');
-          vadResetRef.current();
+          useConversationStore.getState().setPhase('idle');
         }, 500);
       }
     }
@@ -102,97 +91,53 @@ export function useConversation(sessionId: string | null) {
     }
   }, [wsStatus, wsStoreStatus]);
 
-  // --- VAD integration (only fires in auto mode) ---
-  const sendMessageRef = useRef(sendMessage);
-  sendMessageRef.current = sendMessage;
-
-  const vad = useVAD({
-    onSpeechStart: () => {
-      if (!vadEnabledRef.current) return;
-    },
-    onSpeechEnd: () => {
-      if (!vadEnabledRef.current) return;
-      if (useConversationStore.getState().phase === 'listening') {
-        useConversationStore.getState().setPhase('processing');
-        sendMessageRef.current({ type: 'audio_end' });
-      }
-    },
-  });
-
-  const vadRef = useRef(vad);
-  vadRef.current = vad;
-  const vadResetRef = useRef(vad.reset);
-  vadResetRef.current = vad.reset;
-
   // --- Audio pipeline ---
   const sendAudioRef = useRef(sendAudio);
   sendAudioRef.current = sendAudio;
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+
+  const micActiveRef = useRef(false);
 
   const handleAudioChunk = useCallback((chunk: Int16Array) => {
-    const buffer = (chunk.buffer as ArrayBuffer).slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-    if (useConversationStore.getState().phase === 'listening') {
+    const buffer = (chunk.buffer as ArrayBuffer).slice(
+      chunk.byteOffset,
+      chunk.byteOffset + chunk.byteLength,
+    );
+    // Always send audio to server while mic is active (server gates by STT state)
+    if (micActiveRef.current) {
       sendAudioRef.current(buffer);
     }
-    vadRef.current.processChunk(chunk);
   }, []);
 
-  const audioRecorder = useAudioRecorder({
-    onChunk: handleAudioChunk,
-  });
+  const audioRecorder = useAudioRecorder({ onChunk: handleAudioChunk });
 
-  // --- VAD auto mode (single tap) ---
-  const startVAD = useCallback(async () => {
-    practiceActiveRef.current = true;
-    vadEnabledRef.current = true;
+  // --- Tap-to-toggle ---
+  const startRecording = useCallback(async () => {
+    micActiveRef.current = true;
     useConversationStore.getState().setPhase('listening');
     await audioRecorder.start();
   }, [audioRecorder]);
 
-  const stopVAD = useCallback(() => {
-    practiceActiveRef.current = false;
-    vadEnabledRef.current = false;
-    vadRef.current.reset();
-    audioRecorder.stop();
-    useConversationStore.getState().setPhase('idle');
-  }, [audioRecorder]);
-
-  // --- Push-to-talk mode (long press) ---
-  const pttPromiseRef = useRef<Promise<void> | null>(null);
-
-  const startPTT = useCallback(() => {
-    practiceActiveRef.current = true;
-    vadEnabledRef.current = false;
-    vadRef.current.reset();
-    useConversationStore.getState().setPhase('listening');
-    pttPromiseRef.current = audioRecorder.start();
-  }, [audioRecorder]);
-
-  // Release push-to-talk → wait for mic ready → send transcript → stop mic → trigger AI
-  const endPTT = useCallback(async () => {
+  const stopRecording = useCallback(() => {
     if (useConversationStore.getState().phase !== 'listening') return;
-    // Wait for mic to finish starting (if still in progress)
-    if (pttPromiseRef.current) {
-      await pttPromiseRef.current;
-      pttPromiseRef.current = null;
-    }
-    if (useConversationStore.getState().phase !== 'listening') return; // re-check
-    practiceActiveRef.current = false;
-    vadEnabledRef.current = false;
+    micActiveRef.current = false;
     audioRecorder.stop();
     useConversationStore.getState().setPhase('processing');
-    sendMessage({ type: 'audio_end' });
-  }, [audioRecorder, sendMessage]);
+    sendMessageRef.current({ type: 'audio_end' });
+  }, [audioRecorder]);
 
-  // Full session end (clears messages, sends end_session)
+  // Full session end
   const endSession = useCallback(() => {
-    practiceActiveRef.current = false;
-    vadEnabledRef.current = false;
-    vadRef.current.reset();
-    audioRecorder.stop();
+    micActiveRef.current = false;
+    audioRecorder.closeStream();
     audioPlayback.stop();
-    sendMessage({ type: 'end_session' });
+    lastAiTextRef.current = '';
+    audioChunksRef.current = [];
     useConversationStore.getState().reset();
-  }, [audioRecorder, audioPlayback, sendMessage]);
+    useConversationStore.getState().setPhase('evaluating');
+    sendMessageRef.current({ type: 'end_session' });
+  }, [audioRecorder, audioPlayback]);
 
   return {
     phase,
@@ -200,18 +145,11 @@ export function useConversation(sessionId: string | null) {
     interimTranscript,
     wsStatus,
     error: audioRecorder.error || storeError,
-    isRecording: practiceActiveRef.current,
+    isRecording: phase === 'listening',
     isAudioSupported: audioRecorder.isSupported,
     micError: audioRecorder.error || storeError,
-    // VAD auto mode
-    startVAD,
-    stopVAD,
-    // Push-to-talk
-    startPTT,
-    endPTT,
-    // Full session end
+    startRecording,
+    stopRecording,
     endSession,
-    isSpeaking: vad.isSpeaking,
-    silenceProgress: vad.silenceProgress,
   };
 }

@@ -12,6 +12,7 @@ export async function createMicrophoneStream(): Promise<{
   onChunk: (callback: (chunk: Int16Array) => void) => void;
   start: () => void;
   stop: () => void;
+  close: () => void;
 }> {
   const mediaStream = await navigator.mediaDevices.getUserMedia({
     audio: {
@@ -25,18 +26,18 @@ export async function createMicrophoneStream(): Promise<{
   const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
   const source = audioContext.createMediaStreamSource(mediaStream);
 
-  // Downsample if needed: the stream might be 48kHz, we want 16kHz
   // ScriptProcessor node runs at the AudioContext's sample rate
   const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
   let chunkCallback: ((chunk: Int16Array) => void) | null = null;
   let bufferAccumulator = new Float32Array(0);
+  let isActive = false;
 
   // Collect PCM for ~100ms at 16kHz = 1600 samples
   const CHUNK_SIZE = SAMPLE_RATE / 10; // 1600 samples = 100ms
 
   processor.onaudioprocess = (event) => {
-    if (!chunkCallback) return;
+    if (!chunkCallback || !isActive) return;
 
     const input = event.inputBuffer.getChannelData(0); // Float32Array [-1, 1]
 
@@ -58,7 +59,6 @@ export async function createMicrophoneStream(): Promise<{
   };
 
   source.connect(processor);
-  // ScriptProcessor MUST be connected to destination to fire onaudioprocess
   processor.connect(audioContext.destination);
 
   return {
@@ -68,18 +68,23 @@ export async function createMicrophoneStream(): Promise<{
       chunkCallback = callback;
     },
     start() {
-      // AudioContext resumes on user gesture; ScriptProcessor starts immediately
+      isActive = true;
+      bufferAccumulator = new Float32Array(0);
       if (audioContext.state === 'suspended') {
         audioContext.resume();
       }
     },
     stop() {
+      isActive = false;
       // Flush remaining buffer
       if (chunkCallback && bufferAccumulator.length > 0) {
         const int16 = float32ToInt16(bufferAccumulator);
         chunkCallback(int16);
         bufferAccumulator = new Float32Array(0);
       }
+    },
+    close() {
+      isActive = false;
       source.disconnect();
       processor.disconnect();
       mediaStream.getTracks().forEach((track) => track.stop());
