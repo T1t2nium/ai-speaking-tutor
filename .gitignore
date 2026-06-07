@@ -32,6 +32,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Videos > 100MB (use YouTube instead)
+video/讲解.mp4
+
 # Misc
 *.tgz
 *.tsbuildinfo
