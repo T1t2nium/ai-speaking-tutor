@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { ConversationPhase, WsServerMessage } from '@tutor/shared';
+import type { ConversationPhase, WsServerMessage, Evaluation, Correction } from '@tutor/shared';
 
 interface ConversationState {
   phase: ConversationPhase;
@@ -9,6 +9,8 @@ interface ConversationState {
   interimTranscript: string;
   wsStatus: 'disconnected' | 'connecting' | 'connected';
   error: string | null;
+  evaluation: Evaluation | null;
+  correctionMap: Record<number, Correction[]>;
 
   // Actions
   setPhase: (phase: ConversationPhase) => void;
@@ -26,6 +28,8 @@ const initialState = {
   interimTranscript: '',
   wsStatus: 'disconnected' as const,
   error: null as string | null,
+  evaluation: null as Evaluation | null,
+  correctionMap: {} as Record<number, Correction[]>,
 };
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -75,7 +79,37 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         break;
 
       case 'ai_response_end':
-        set({ phase: 'idle' });
+        set((state) => {
+          // Don't leave evaluating phase (end_session is in progress)
+          if (state.phase === 'evaluating') return {};
+          return { phase: 'idle' };
+        });
+        break;
+
+      case 'correction':
+        if (msg.messageIndex !== undefined) {
+          const clientMsgIndex = msg.messageIndex * 2;
+          set((state) => ({
+            correctionMap: {
+              ...state.correctionMap,
+              [clientMsgIndex]: [
+                ...(state.correctionMap[clientMsgIndex] || []),
+                {
+                  id: msg.id,
+                  original: msg.original,
+                  corrected: msg.corrected,
+                  correctionType: msg.correctionType,
+                  category: msg.category,
+                  explanation: msg.explanation,
+                },
+              ],
+            },
+          }));
+        }
+        break;
+
+      case 'evaluation_result':
+        set({ evaluation: msg.evaluation, phase: 'evaluating' });
         break;
 
       case 'error':

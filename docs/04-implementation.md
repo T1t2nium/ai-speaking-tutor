@@ -73,21 +73,24 @@ The project is divided into 7 independently testable phases. Each phase builds o
 - [x] Multi-turn voice conversation stable
 - No dead air or awkward pauses
 
-## Phase 5: Corrections & Evaluation
-**Focus:** Pronunciation feedback, grammar corrections, scoring.
+## Phase 5: Corrections & Evaluation ✅
+**Status:** Complete (2026-06-07)
 
 ### Tasks
-- [ ] Speechace API integration for pronunciation evaluation
-- [ ] Claude grammar analysis prompt for conversation review
-- [ ] Post-session evaluation pipeline (aggregate scores)
-- [ ] Evaluation UI (gauges, error lists, vocabulary table)
-- [ ] Per-turn correction display (non-intrusive annotations)
+- [x] Speechace API integration for pronunciation evaluation
+- [x] DeepSeek grammar analysis prompt for per-turn corrections
+- [x] DeepSeek evaluation generation for post-session scores
+- [x] Audio buffering per turn for pronunciation evaluation
+- [x] Inline correction UI (non-intrusive, expandable)
+- [x] Evaluation panel UI (score gauges, error lists, vocabulary, recommendations)
+- [x] Shared types: evaluation_result message, correction messageIndex
 
 ### Verification
-- Complete session → evaluation generated
-- Pronunciation scores match perceived accuracy
-- Grammar corrections are accurate and helpful
-- UI displays all metrics clearly
+- [x] User speaks with grammar error → correction appears inline after AI response
+- [x] End session → evaluation panel appears with scores, summary, recommendations
+- [x] Pronunciation errors listed with word-level scores and suggestions
+- [x] Multi-turn: corrections accumulate across turns in evaluation summary
+- [x] `npm run build` passes (both server and frontend)
 
 ## Phase 6: Persistence & Authentication
 **Focus:** User accounts, session history, progress tracking.

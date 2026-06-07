@@ -14,7 +14,10 @@ interface UseAudioRecorderReturn {
   error: string | null;
   start: () => Promise<void>;
   stop: () => void;
+  closeStream: () => void;
 }
+
+type MicStream = Awaited<ReturnType<typeof createMicrophoneStream>>;
 
 export function useAudioRecorder({
   onChunk,
@@ -25,23 +28,26 @@ export function useAudioRecorder({
     () => typeof window !== 'undefined' && !!(navigator.mediaDevices?.getUserMedia),
   );
   const [error, setError] = useState<string | null>(null);
-  const recorderRef = useRef<Awaited<ReturnType<typeof createMicrophoneStream>> | null>(null);
+  const recorderRef = useRef<MicStream | null>(null);
 
   const start = useCallback(async () => {
     setError(null);
     try {
-      const recorder = await createMicrophoneStream();
-      recorderRef.current = recorder;
+      // Create mic stream once, reuse across turns
+      if (!recorderRef.current) {
+        const recorder = await createMicrophoneStream();
+        recorderRef.current = recorder;
 
-      recorder.onChunk((chunk) => {
-        onChunk(chunk);
-      });
+        recorder.onChunk((chunk) => {
+          onChunk(chunk);
+        });
 
-      if (onStreamReady) {
-        onStreamReady(recorder.mediaStream);
+        if (onStreamReady) {
+          onStreamReady(recorder.mediaStream);
+        }
       }
 
-      recorder.start();
+      recorderRef.current.start();
       setIsRecording(true);
     } catch (err) {
       const message =
@@ -56,9 +62,14 @@ export function useAudioRecorder({
 
   const stop = useCallback(() => {
     recorderRef.current?.stop();
+    setIsRecording(false);
+  }, []);
+
+  const closeStream = useCallback(() => {
+    recorderRef.current?.close();
     recorderRef.current = null;
     setIsRecording(false);
   }, []);
 
-  return { isRecording, isSupported, error, start, stop };
+  return { isRecording, isSupported, error, start, stop, closeStream };
 }

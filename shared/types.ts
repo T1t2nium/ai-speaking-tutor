@@ -144,8 +144,9 @@ export type WsServerMessage =
   | { type: 'ai_response_start'; text: string }
   | { type: 'ai_audio_chunk'; seq: number }
   | { type: 'ai_response_end' }
-  | { type: 'correction'; id: string; original: string; corrected: string; correctionType: CorrectionType; category: string; explanation: string }
+  | { type: 'correction'; messageIndex: number; id: string; original: string; corrected: string; correctionType: CorrectionType; category: string; explanation: string }
   | { type: 'evaluation_partial'; fluency: number; pronunciation: number; grammar: number; vocabulary: number }
+  | { type: 'evaluation_result'; evaluation: Evaluation }
   | { type: 'error'; code: string; message: string }
   | { type: 'fatal_error'; code: string; message: string }
   | { type: 'pong' }

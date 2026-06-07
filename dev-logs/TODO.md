@@ -43,11 +43,14 @@
 - [x] LLM failure recovery (auto-resume listening)
 - [x] DeepSeek v4-flash model + retry logic (5 attempts, exponential backoff)
 
-### Phase 5: Corrections & Evaluation
-- [ ] Speechace pronunciation API
-- [ ] Grammar/expression correction via DeepSeek
-- [ ] Post-session evaluation (scores, vocabulary, recommendations)
-- [ ] Evaluation UI (gauges, error lists, vocabulary table)
+### Phase 5: Corrections & Evaluation ✅
+- [x] Speechace pronunciation API integration (PCM→WAV, phoneme scoring)
+- [x] Grammar/expression correction via DeepSeek (fire-and-forget per turn)
+- [x] Audio buffering per turn for pronunciation evaluation
+- [x] Post-session evaluation pipeline (pronunciation + grammar + DeepSeek scores)
+- [x] Inline correction UI (strikethrough/corrected, expandable explanation)
+- [x] Evaluation panel UI (score gauges, error lists, vocabulary, recommendations)
+- [x] Shared types: evaluation_result message, correction messageIndex
 
 ### Phase 6: Persistence & Authentication
 - [ ] Supabase project setup + Drizzle ORM migrations
@@ -65,4 +68,4 @@
 
 ---
 
-Last updated: 2026-06-07
+Last updated: 2026-06-07 (Phase 5 complete)
