@@ -80,13 +80,23 @@ export async function wsHandler(socket: WsType, req: FastifyRequest) {
     }
   }
 
+  let lastSTTCreation = 0;
+  const STT_COOLDOWN_MS = 2000;
+
   function getOrCreateSTT(): STTStream {
     if (!stt || !stt.isConnected()) {
-      if (stt) {
-        logger.info('STT disconnected, creating replacement...');
-      } else {
-        logger.info('Creating new Deepgram STT stream...');
+      const now = Date.now();
+      if (now - lastSTTCreation < STT_COOLDOWN_MS) {
+        // Don't recreate too fast — let the current one stabilize or fail properly
+        if (stt) return stt;
+        // If stt is null (cleared by onClosed), audio is lost until cooldown passes
+        logger.warn('STT cooldown active, dropping audio chunk');
+        const dummy = { sendAudio: () => {}, finalize: () => Promise.resolve(), close: () => {}, isConnected: () => false };
+        return dummy as STTStream;
       }
+      lastSTTCreation = now;
+
+      logger.info('Creating new Deepgram STT stream...');
       stt = createSTTStream(
         (text, _confidence, isFinal) => {
           if (socket.readyState !== WebSocket.OPEN) return;
