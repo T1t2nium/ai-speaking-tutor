@@ -36,6 +36,8 @@ export function createSTTStream(
   const FINALIZE_TIMEOUT = 5000;
   const audioBuffer: Buffer[] = [];
 
+  logger.info('Deepgram STT connecting...');
+
   ws.on('open', () => {
     isOpen = true;
     logger.info('Deepgram WebSocket connected');
@@ -79,13 +81,21 @@ export function createSTTStream(
   });
 
   ws.on('error', (err: Error) => {
-    logger.error('Deepgram WebSocket error:', err.message);
+    logger.error(`Deepgram WebSocket error: ${err.message}`);
     isOpen = false;
     if (resolveFinalize) {
       resolveFinalize();
       resolveFinalize = null;
     }
     onClosed?.();
+  });
+
+  ws.on('unexpected-response', (_req, res) => {
+    let body = '';
+    res.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    res.on('end', () => {
+      logger.error(`Deepgram HTTP ${res.statusCode}: ${body.slice(0, 300)}`);
+    });
   });
 
   return {
