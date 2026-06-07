@@ -66,7 +66,6 @@ async function chatJson(
 
     const data = await response.json() as Record<string, unknown>;
     const content = (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content;
-    logger.info(`Grammar DeepSeek response: ${content ? content.length : 0} chars`);
     return content || '';
   } finally {
     clearTimeout(timeout);
@@ -101,6 +100,7 @@ export async function analyzeGrammar(
         return [];
       }
 
+      logger.info(`Grammar DeepSeek response: ${trimmed.length} chars`);
       const json = extractJsonArray(trimmed);
       const parsed = JSON.parse(json);
 
@@ -151,26 +151,31 @@ function extractJsonArray(text: string): string {
     JSON.parse(json);
     return json;
   } catch {
-    // Apply fixes one at a time, trying parse after each
-    const fixes = [
-      // 1. Convert single-quoted JSON to double-quoted (DeepSeek common mistake)
-      (j: string) => {
-        // Replace 'key': → "key":
-        let r = j.replace(/'([^']+)'(\s*:)/g, '"$1"$2');
-        // Replace : 'value' → : "value"
-        r = r.replace(/(:\s*)'([^']*)'/g, '$1"$2"');
+    const fixes: Array<(j: string) => string> = [
+      // 1. Convert single-quoted JSON — only quoted keys and values, skip apostrophes in words
+      (j) => {
+        // Quoted keys: 'key': → "key":
+        let r = j.replace(/'([a-zA-Z_]\w*)'(\s*:)/g, '"$1"$2');
+        // Quoted values: : 'value text' → : "value text" (only at start of value, before comma/brace)
+        r = r.replace(/(:\s*)'([^']*)'(\s*[,}\]])/g, '$1"$2"$3');
         return r;
       },
       // 2. Remove trailing commas before } or ]
-      (j: string) => j.replace(/,(\s*[}\]])/g, '$1'),
-      // 3. Add quotes to unquoted property names: {key: → {"key":
-      (j: string) => j.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3'),
-      // 4. Fix missing commas between string values: "val" "val" → "val", "val"
-      (j: string) => j.replace(/"(\s+)"/g, '",$1"'),
+      (j) => j.replace(/,(\s*[}\]])/g, '$1'),
+      // 3. Add quotes to unquoted property names
+      (j) => j.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3'),
+      // 4. Fix missing commas between adjacent strings
+      (j) => j.replace(/"(\s+)"/g, '",$1"'),
       // 5. Escape unescaped quotes inside string values
-      (j: string) => j.replace(/: *"([^"]*?)"([^,}\]])/g,
-        (_m: string, val: string, next: string) =>
-          `: "${val.replace(/"/g, '\\"')}"${next}`),
+      (j) => j.replace(/: *"([^"]*?)"([^,}\]])/g,
+        (_m, val, next) => `: "${val.replace(/"/g, '\\"')}"${next}`),
+      // 6. Close unterminated string at end of JSON
+      (j) => {
+        const quotes = j.match(/"/g);
+        if (quotes && quotes.length % 2 !== 0) return j + '"';
+        if (j.endsWith('\\')) return j.slice(0, -1) + '"';
+        return j;
+      },
     ];
 
     for (const fix of fixes) {
@@ -183,7 +188,9 @@ function extractJsonArray(text: string): string {
       }
     }
 
-    logger.warn(`extractJsonArray failed, raw (first 200 chars): ${json.slice(0, 200)}`);
+    logger.warn(`extractJsonArray failed after ${fixes.length} fixes`);
+    logger.warn(`  raw start: ${json.slice(0, 300)}`);
+    logger.warn(`  raw end:   ...${json.slice(-150)}`);
     return json;
   }
 }
@@ -203,13 +210,17 @@ function extractJsonObject(text: string): string {
     JSON.parse(json);
     return json;
   } catch {
-    const fixes = [
-      (j: string) => j.replace(/,(\s*[}\]])/g, '$1'),
-      (j: string) => j.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3'),
-      (j: string) => j.replace(/"(\s+)"/g, '",$1"'),
-      (j: string) => j.replace(/: *"([^"]*?)"([^,}\]])/g,
-        (_m: string, val: string, next: string) =>
-          `: "${val.replace(/"/g, '\\"')}"${next}`),
+    const fixes: Array<(j: string) => string> = [
+      (j) => j.replace(/,(\s*[}\]])/g, '$1'),
+      (j) => j.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3'),
+      (j) => j.replace(/"(\s+)"/g, '",$1"'),
+      (j) => j.replace(/: *"([^"]*?)"([^,}\]])/g,
+        (_m, val, next) => `: "${val.replace(/"/g, '\\"')}"${next}`),
+      (j) => {
+        const quotes = j.match(/"/g);
+        if (quotes && quotes.length % 2 !== 0) return j + '"';
+        return j;
+      },
     ];
 
     for (const fix of fixes) {
@@ -222,8 +233,9 @@ function extractJsonObject(text: string): string {
       }
     }
 
-    logger.warn(`extractJsonObject failed, raw: ${json.slice(0, 300)}...`);
-    logger.warn(`extractJsonObject end: ...${json.slice(-200)}`);
+    logger.warn(`extractJsonObject failed after ${fixes.length} fixes`);
+    logger.warn(`  raw start: ${json.slice(0, 300)}`);
+    logger.warn(`  raw end:   ...${json.slice(-200)}`);
     return json;
   }
 }
