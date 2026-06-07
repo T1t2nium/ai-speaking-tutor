@@ -8,6 +8,7 @@ export interface STTStream {
   sendAudio: (chunk: Buffer) => void;
   finalize: () => Promise<void>;
   close: () => void;
+  isConnected: () => boolean;
 }
 
 export function createSTTStream(
@@ -40,9 +41,9 @@ export function createSTTStream(
 
   ws.on('open', () => {
     isOpen = true;
-    logger.info('Deepgram WebSocket connected');
-    // Flush buffered audio
-    if (audioBuffer.length > 0) {
+    const buffered = audioBuffer.length;
+    logger.info(`Deepgram WebSocket connected (${buffered} buffered chunks)`);
+    if (buffered > 0) {
       for (const chunk of audioBuffer) {
         ws.send(chunk);
       }
@@ -69,10 +70,9 @@ export function createSTTStream(
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', (code: number, reason: Buffer) => {
     isOpen = false;
-    logger.info('Deepgram WebSocket closed');
-    // Resolve pending finalize on unexpected close
+    logger.info(`Deepgram WebSocket closed (code=${code} reason="${reason.toString().slice(0, 100)}")`);
     if (resolveFinalize) {
       resolveFinalize();
       resolveFinalize = null;
@@ -103,9 +103,11 @@ export function createSTTStream(
       if (isOpen) {
         ws.send(chunk);
       } else if (!finalized) {
-        // Buffer audio until Deepgram connection opens
         audioBuffer.push(chunk);
       }
+    },
+    isConnected() {
+      return isOpen;
     },
     finalize(): Promise<void> {
       if (!isOpen || finalized) return Promise.resolve();
