@@ -49,7 +49,7 @@ async function chatJson(
         Authorization: `Bearer ${config.deepseek.apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: 'deepseek-chat',
         messages,
         stream: false,
         temperature: 0.3,
