@@ -41,9 +41,16 @@
 - Auth-aware navigation (login/register links or user menu)
 
 ### Verified
-- `npm run build` passes (server + frontend)
-- Server TypeScript compiles with strict mode
-- Frontend TypeScript compiles with strict mode
+- Register → login → practice → evaluation → dashboard: full flow works
+- Multiple users isolated via JWT + DB queries
+- Session/message/evaluation all persisted to PostgreSQL
+
+### Phase 6 Fixes
+- Supabase pooler DNS: `.supabase.com` (not `.co`), SSL `rejectUnauthorized: false`
+- JSON extraction: improved single-quote handling, unterminated string repair
+- STT auto-reconnect: `isConnected()` check + 2s cooldown prevents infinite loop
+- Grammar reliability: switched from `deepseek-v4-flash` to `deepseek-chat`, 3 retries
+- ElevenLabs 402: suppressed noisy ERROR log (free tier is expected)
 
 ---
 
