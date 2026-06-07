@@ -184,6 +184,8 @@ export async function wsHandler(socket: WsType, req: FastifyRequest) {
       ttsController = null;
       if (err instanceof Error && err.message === 'Aborted') {
         logger.info('TTS aborted by interrupt');
+      } else if (err instanceof Error && /402/.test(err.message)) {
+        // 402 = free tier, already logged in tts.ts, skip
       } else {
         logger.error('TTS error:', err);
         if (socket.readyState === WebSocket.OPEN) {
