@@ -65,8 +65,13 @@ async function chatJson(
     }
 
     const data = await response.json() as Record<string, unknown>;
-    const content = (data as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content;
-    return content || '';
+    const rawChoices = data as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
+    const content = rawChoices.choices?.[0]?.message?.content;
+    if (!content) {
+      logger.warn(`DeepSeek empty — finish=${rawChoices.choices?.[0]?.finish_reason}`);
+      return '';
+    }
+    return content;
   } finally {
     clearTimeout(timeout);
   }
@@ -86,17 +91,17 @@ export async function analyzeGrammar(
     { role: 'user', content: `Sentence: "${transcript}"\nContext: ${scenarioTitle || 'General conversation'}` },
   ];
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const raw = await chatJson(messages, 512, signal);
       const trimmed = raw.trim();
       if (!trimmed) {
-        if (attempt === 0) {
-          logger.warn(`Grammar analysis empty, retrying (attempt ${attempt + 1})`);
-          await new Promise((r) => setTimeout(r, 1000));
+        if (attempt < 2) {
+          logger.warn(`Grammar analysis empty, retrying (attempt ${attempt + 1}/2)`);
+          await new Promise((r) => setTimeout(r, 2000));
           continue;
         }
-        logger.warn('Grammar analysis returned empty after retry');
+        logger.warn('Grammar analysis failed after 3 attempts');
         return [];
       }
 
