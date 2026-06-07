@@ -11,6 +11,7 @@ interface ConversationState {
   error: string | null;
   evaluation: Evaluation | null;
   correctionMap: Record<number, Correction[]>;
+  scenario: { id: string; slug: string; title: string; icon: string } | null;
 
   // Actions
   setPhase: (phase: ConversationPhase) => void;
@@ -30,6 +31,7 @@ const initialState = {
   error: null as string | null,
   evaluation: null as Evaluation | null,
   correctionMap: {} as Record<number, Correction[]>,
+  scenario: null as { id: string; slug: string; title: string; icon: string } | null,
 };
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -50,7 +52,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   handleServerMessage: (msg) => {
     switch (msg.type) {
       case 'connected':
-        set({ phase: 'idle' });
+        set({ phase: 'idle', scenario: msg.scenario });
         break;
 
       case 'interim_transcript':

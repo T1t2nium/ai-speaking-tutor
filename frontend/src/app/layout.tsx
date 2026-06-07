@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import '../styles/globals.css';
+import { AuthNav } from './AuthNav';
 
 export const metadata: Metadata = {
   title: 'AI Speaking Tutor',
@@ -15,10 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/" className="text-xl font-bold text-primary-700">
               AI Speaking Tutor
             </a>
-            <nav className="flex items-center gap-4 text-sm text-slate-600">
-              <a href="/dashboard" className="hover:text-slate-900">Dashboard</a>
-              <a href="/history" className="hover:text-slate-900">History</a>
-            </nav>
+            <AuthNav />
           </div>
         </header>
         <main className="flex-1">{children}</main>

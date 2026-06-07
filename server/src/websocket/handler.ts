@@ -10,6 +10,8 @@ import { streamChat } from '../services/llm';
 import { streamTTS } from '../services/tts';
 import { evaluatePronunciation } from '../services/pronunciation';
 import { analyzeGrammar, generateEvaluation } from '../services/evaluation';
+import { verifyToken } from '../services/auth';
+import { addMessage, saveEvaluation, endSession as endDBSession, getSessionScenario } from '../services/sessionStore';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -23,11 +25,33 @@ interface TurnData {
   pronunciationErrors?: PronunciationError[];
 }
 
-export function wsHandler(socket: WsType, req: FastifyRequest) {
+export async function wsHandler(socket: WsType, req: FastifyRequest) {
   const { sessionId } = req.params as { sessionId: string };
-  logger.info(`WebSocket connected for session: ${sessionId}`);
 
-  const scenario = getScenarioById(sessionId);
+  // Extract and verify JWT from query string
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const token = url.searchParams.get('token');
+  if (!token) {
+    logger.warn(`WS auth missing: ${sessionId}`);
+    socket.send(JSON.stringify({ type: 'fatal_error', code: 'unauthorized', message: 'Missing authentication token' }));
+    socket.close();
+    return;
+  }
+
+  const tokenPayload = verifyToken(token);
+  if (!tokenPayload) {
+    logger.warn(`WS auth invalid: ${sessionId}`);
+    socket.send(JSON.stringify({ type: 'fatal_error', code: 'unauthorized', message: 'Invalid or expired token' }));
+    socket.close();
+    return;
+  }
+
+  const authenticatedUserId = tokenPayload.sub;
+  logger.info(`WebSocket connected: session=${sessionId} user=${authenticatedUserId}`);
+
+  // Load session scenario from DB (sessionId is now a UUID, not a scenario ID)
+  const sessionData = await getSessionScenario(sessionId);
+  const scenario = sessionData ? getScenarioById(sessionData.scenarioId) : null;
   const history: ChatMessage[] = [];
   if (scenario) {
     history.push({ role: 'system', content: scenario.systemPrompt });
@@ -122,6 +146,9 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
 
     history.push({ role: 'assistant', content: aiText });
     socket.send(JSON.stringify({ type: 'ai_response_start', text: aiText }));
+
+    // Persist AI message (fire-and-forget)
+    addMessage(sessionId, 'ai', aiText, userMessageCount);
 
     // Run grammar analysis sequentially AFTER LLM (avoids concurrent DeepSeek requests)
     if (userTranscript && turnIdx !== undefined && socket.readyState === WebSocket.OPEN) {
@@ -230,6 +257,9 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
             lastTurnIdx = userMessageCount;
             userMessageCount++;
             turns.push({ transcript: combined, audioBuffer: turnAudio });
+
+            // Persist user message (fire-and-forget)
+            addMessage(sessionId, 'user', combined, lastTurnIdx + 1);
           } else {
             logger.info('No transcript from audio_end — skipping generateResponse');
           }
@@ -335,6 +365,25 @@ export function wsHandler(socket: WsType, req: FastifyRequest) {
                 },
               }));
             }
+
+            // Step 6: Persist evaluation and end session
+            const userWords = turns.reduce((sum, t) => sum + t.transcript.split(/\s+/).length, 0);
+            endDBSession(sessionId, {
+              turnCount: turns.length,
+              userWordCount: userWords,
+            });
+            saveEvaluation(sessionId, {
+              overallScore: scores.overallScore,
+              fluencyScore: scores.fluencyScore,
+              pronunciationScore: scores.pronunciationScore,
+              grammarAccuracy: scores.grammarAccuracy,
+              vocabularyRichness: scores.vocabularyRichness,
+              pronunciationErrors: allPronunciationErrors,
+              grammarCorrections: allGrammarCorrections,
+              vocabularyUsed: scores.vocabularyUsed,
+              summary: scores.summary,
+              recommendations: scores.recommendations,
+            });
           } catch (err) {
             logger.error('Evaluation pipeline error:', err);
           }

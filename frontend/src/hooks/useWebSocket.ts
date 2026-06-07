@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WsServerMessage } from '@tutor/shared';
 import { WS_BASE_URL } from '@/lib/constants';
+import { useAuthStore } from '@/store/authStore';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
@@ -49,7 +50,8 @@ export function useWebSocket({
       if (cancelledRef.current) return;
 
       setStatus('connecting');
-      const url = `${WS_BASE_URL}/ws/session/${sessionId}`;
+      const token = useAuthStore.getState().token;
+      const url = `${WS_BASE_URL}/ws/session/${sessionId}${token ? `?token=${token}` : ''}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
