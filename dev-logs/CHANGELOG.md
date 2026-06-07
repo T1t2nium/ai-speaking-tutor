@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-06-07 — Phase 4: VAD & Natural Turn-Taking
+
+### Created
+- `frontend/src/hooks/useVAD.ts` — RMS energy-based VAD with hysteresis, zero dependencies
+
+### Modified
+- `frontend/src/hooks/useConversation.ts` — Dual input modes:
+  - Long-press: push-to-talk (hold to record, release → AI)
+  - Single-tap: VAD auto mode (auto-detect speech end)
+  - Continuous mic, audio gated by phase, VAD guarded by vadEnabled flag
+  - Browser TTS onend transitions back to listening
+- `frontend/src/app/session/[id]/page.tsx` — Long-press/tap detection (300ms threshold)
+  - Silence progress bar, phase-dependent labels
+- `frontend/src/store/conversationStore.ts` — Consecutive user messages merged into one bubble
+- `server/src/websocket/handler.ts` — Interrupt handling with AbortController
+  - STT lifecycle fix: null after finalize to allow fresh STT on next audio
+  - Transcript merging: all pending transcripts joined into one user message at audio_end
+  - Empty audio_end sends ai_response_end (no hang)
+- `server/src/services/llm.ts` — Switched to deepseek-v4-flash, 5 retries with exponential backoff
+  - Connection: close header for fresh TCP per request
+- `server/src/services/tts.ts` — Optional AbortSignal for interruption, 402 logged as WARN
+
+### Key Features
+- Auto speech detection with 1200ms silence threshold (forgiving for learners)
+- Silence progress indicator in UI
+- Push-to-talk mode for precise control
+- VAD auto mode for natural conversation
+- Transcript fragmentation merged into coherent messages
+- LLM failure auto-recovery (resumes listening)
+
+### Verified
+- Natural multi-turn voice conversation
+- Long-press PTT and single-tap VAD both working
+- Interrupt message wiring in place (server-side AbortController)
+
+---
+
 ## 2026-06-06 — Phase 3 Fixes: LLM Retry + STT Finalize Race + TTS Fallback
 
 ### Modified

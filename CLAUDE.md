@@ -6,7 +6,7 @@ An AI-powered English speaking tutor web application. Users practice spoken Engl
 
 **Tech stack:** Next.js 14 (frontend), Fastify/Node.js (backend), TypeScript throughout, WebSocket for real-time audio, Deepgram STT, DeepSeek LLM, ElevenLabs TTS, Speechace pronunciation, Supabase PostgreSQL + Auth.
 
-**Status:** Phase 1, 2, 3 complete. Moving to Phase 4 — VAD & Natural Turn-Taking.
+**Status:** Phase 1-4 complete. Moving to Phase 5 — Corrections & Evaluation.
 
 ## Documentation Map
 

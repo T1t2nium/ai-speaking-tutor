@@ -11,12 +11,17 @@ export async function streamTTS(
   text: string,
   voiceId: string,
   onChunk: (chunk: Buffer) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const url = `${ELEVENLABS_TTS_URL}/${voiceId}/stream`;
   logger.info(`TTS request: ${text.length} chars, voice=${voiceId}`);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
+  if (signal) {
+    if (signal.aborted) { clearTimeout(timeout); throw new Error('Aborted'); }
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
 
   try {
     const response = await fetch(url, {

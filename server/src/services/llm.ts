@@ -2,8 +2,8 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 const DEEPSEEK_API = 'https://api.deepseek.com/v1/chat/completions';
-const MAX_RETRIES = 3;
-const RETRY_DELAYS = [1000, 2000, 4000];
+const MAX_RETRIES = 5;
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000];
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -14,21 +14,20 @@ type StreamCallback = (text: string) => void;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Stream a chat completion from DeepSeek.
- * Calls `onToken` with each text chunk as it arrives.
- * Returns the full accumulated response text.
- * Retries up to 2 times on socket-level errors.
- */
 export async function streamChat(
   messages: ChatMessage[],
   onToken: StreamCallback,
+  signal?: AbortSignal,
 ): Promise<string> {
   logger.info(`DeepSeek request: ${messages.length} messages, last role=${messages[messages.length - 1]?.role}`);
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
+    if (signal) {
+      if (signal.aborted) { clearTimeout(timeout); throw new Error('Aborted'); }
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
 
     try {
       const response = await fetch(DEEPSEEK_API, {
@@ -36,13 +35,14 @@ export async function streamChat(
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.deepseek.apiKey}`,
+          'Connection': 'close',
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           messages,
           stream: true,
           temperature: 0.7,
-          max_tokens: 500,
+          max_tokens: 1024,
         }),
         signal: controller.signal,
       });
@@ -90,7 +90,9 @@ export async function streamChat(
       return fullText;
     } catch (err) {
       clearTimeout(timeout);
-      // Only retry on socket/network errors (TypeError), not HTTP errors
+      if (signal?.aborted || (err instanceof Error && err.message === 'Aborted')) {
+        throw err;
+      }
       if (err instanceof TypeError && attempt < MAX_RETRIES - 1) {
         logger.warn(`DeepSeek socket error, retry ${attempt + 1}/${MAX_RETRIES - 1} in ${RETRY_DELAYS[attempt]}ms`);
         await sleep(RETRY_DELAYS[attempt]);
@@ -100,6 +102,5 @@ export async function streamChat(
     }
   }
 
-  // Unreachable — last attempt throws above
   throw new Error('DeepSeek API: all retries exhausted');
 }

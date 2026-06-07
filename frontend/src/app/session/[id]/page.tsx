@@ -1,8 +1,11 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+import { useCallback, useRef } from 'react';
 import { getScenarioById } from '@tutor/shared/scenarios';
 import { useConversation } from '@/hooks/useConversation';
+
+const HOLD_MS = 300;
 
 export default function SessionPage() {
   const params = useParams();
@@ -16,9 +19,51 @@ export default function SessionPage() {
     isAudioSupported,
     micError,
     wsStatus,
-    toggleRecording,
+    startVAD,
+    stopVAD,
+    startPTT,
+    endPTT,
     endSession,
+    isSpeaking,
+    silenceProgress,
   } = useConversation(params.id as string);
+
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pttActiveRef = useRef(false);
+
+  const onPointerDown = useCallback(() => {
+    const p = phase;
+    if (p === 'processing' || p === 'speaking') return;
+    // Start hold timer — if held > HOLD_MS, enter push-to-talk
+    holdTimerRef.current = setTimeout(() => {
+      pttActiveRef.current = true;
+      startPTT();
+    }, HOLD_MS);
+  }, [phase, startPTT]);
+
+  const onPointerUp = useCallback(async () => {
+    // Clear the hold timer (either it fired or it didn't)
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
+    if (pttActiveRef.current) {
+      // Was a long press — end push-to-talk turn
+      pttActiveRef.current = false;
+      await endPTT();
+      return;
+    }
+
+    // Short tap
+    const p = phase;
+    if (p === 'idle') {
+      startVAD();
+    } else if (p === 'listening') {
+      stopVAD();
+    }
+    // processing / speaking → ignore
+  }, [phase, startVAD, stopVAD, endPTT]);
 
   if (!scenario) {
     return (
@@ -31,9 +76,14 @@ export default function SessionPage() {
     );
   }
 
+  const vadLabel = phase === 'listening'
+    ? (isSpeaking ? 'Speaking...' : 'Listening...')
+    : null;
+  const showSilenceWarning = phase === 'listening' && !isSpeaking && silenceProgress > 0.5;
+
   const phaseLabel = {
-    idle: 'Ready',
-    listening: 'Listening...',
+    idle: 'Start Practice',
+    listening: vadLabel || 'Listening...',
     processing: 'Processing...',
     speaking: 'AI Speaking...',
     evaluating: 'Evaluating...',
@@ -41,11 +91,17 @@ export default function SessionPage() {
 
   const phaseColor = {
     idle: 'bg-slate-100 text-slate-500',
-    listening: 'bg-red-100 text-red-700 animate-pulse',
+    listening: isSpeaking
+      ? 'bg-green-100 text-green-700 animate-pulse'
+      : showSilenceWarning
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-green-100 text-green-600',
     processing: 'bg-amber-100 text-amber-700',
     speaking: 'bg-blue-100 text-blue-700',
     evaluating: 'bg-purple-100 text-purple-700',
   }[phase];
+
+  const practiceActive = phase !== 'idle';
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col min-h-[calc(100vh-73px)]">
@@ -63,10 +119,20 @@ export default function SessionPage() {
               {wsStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
             </span>
           )}
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${phaseColor}`}>
-            {phaseLabel}
-          </span>
-          {phase !== 'idle' && (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${phaseColor}`}>
+              {phaseLabel}
+            </span>
+            {phase === 'listening' && !isSpeaking && (
+              <span className="block w-12 h-0.5 bg-slate-200 rounded-full overflow-hidden">
+                <span
+                  className="block h-full bg-amber-400 rounded-full transition-all duration-100"
+                  style={{ width: `${Math.min(silenceProgress * 100, 100)}%` }}
+                />
+              </span>
+            )}
+          </div>
+          {practiceActive && (
             <button
               onClick={endSession}
               className="text-xs text-slate-400 hover:text-red-500 transition-colors"
@@ -101,7 +167,7 @@ export default function SessionPage() {
             <p className="text-center">
               {!isAudioSupported
                 ? 'Your browser does not support microphone access. Please use Chrome, Edge, or Firefox.'
-                : 'Tap the microphone to start speaking'}
+                : 'Hold to speak · Tap for auto mode'}
             </p>
           </div>
         )}
@@ -123,7 +189,6 @@ export default function SessionPage() {
           </div>
         ))}
 
-        {/* Interim transcript (what STT is hearing live) */}
         {interimTranscript && (
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-xl px-4 py-3 text-sm bg-primary-300 text-white italic">
@@ -132,7 +197,6 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Processing indicator */}
         {phase === 'processing' && (
           <div className="flex justify-start">
             <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
@@ -147,19 +211,24 @@ export default function SessionPage() {
       </div>
 
       {/* Audio controls */}
-      <div className="flex justify-center pb-4">
+      <div className="flex flex-col items-center gap-2 pb-4">
+        <p className="text-xs text-slate-400">
+          {practiceActive
+            ? 'Tap to stop recording'
+            : 'Hold to talk · Tap for auto'}
+        </p>
         <button
-          onClick={toggleRecording}
-          disabled={phase === 'processing' || phase === 'speaking'}
-          className={`w-16 h-16 rounded-full flex items-center justify-center transition-all
-            ${isRecording
-              ? 'bg-red-500 scale-110 shadow-lg shadow-red-200'
-              : 'bg-primary-600 hover:bg-primary-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed'
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-md select-none touch-none
+            ${practiceActive
+              ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-200'
+              : 'bg-primary-600 hover:bg-primary-700'
             }`}
-          title={isRecording ? 'Stop speaking' : 'Start speaking'}
+          title={practiceActive ? 'Stop Recording' : 'Hold to talk · Tap for auto'}
         >
           <span className="text-white text-2xl">
-            {isRecording ? '⏹' : '🎤'}
+            {practiceActive ? '⏹' : '🎤'}
           </span>
         </button>
       </div>

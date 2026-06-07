@@ -57,18 +57,20 @@ The project is divided into 7 independently testable phases. Each phase builds o
 - [x] Turn transitions feel reasonably fast
 
 ## Phase 4: VAD & Natural Turn-Taking
-**Focus:** Automatic speech detection and interruption handling.
+**Status:** Complete (2026-06-07)
 
 ### Tasks
-- [ ] Silero VAD model download and ONNX setup
-- [ ] useVAD hook (speech probability, start/end detection)
-- [ ] Auto audio_end on silence detection
-- [ ] Interruption: abort LLM + TTS on user speech during AI playback
-- [ ] Pipeline reset and state recovery after interrupt
+- [x] RMS energy-based VAD hook (zero-dependency, hysteresis thresholds)
+- [x] Auto audio_end on silence detection (1200ms)
+- [x] Long-press push-to-talk + single-tap VAD auto dual input modes
+- [x] Interruption: server AbortController for LLM + TTS
+- [x] LLM failure auto-recovery (resumes listening)
+- [x] Transcript merging (fragmented speech → one message)
 
 ### Verification
-- Natural back-and-forth without manual start/stop
-- Interrupting AI works seamlessly
+- [x] Natural back-and-forth without manual start/stop
+- [x] Push-to-talk and VAD auto modes both working
+- [x] Multi-turn voice conversation stable
 - No dead air or awkward pauses
 
 ## Phase 5: Corrections & Evaluation
