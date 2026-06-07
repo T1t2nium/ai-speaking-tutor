@@ -4,17 +4,18 @@ An AI-powered English speaking practice application with real-time voice interac
 
 ## Demo
 
-### Feature Walkthrough
+### 📹 Full Walkthrough (with narration)
 
-https://github.com/user-attachments/assets/placeholder
+The full demo video (245MB) exceeds GitHub's 100MB file limit. Download from Baidu Cloud:
 
-> Upload `讲解.mp4` to YouTube and replace the link above with the video URL. GitHub will automatically show an inline preview card.
+| | |
+|---|---|
+| **Link** | [https://pan.baidu.com/s/1WIR01oz16v60UUlTaBpJDQ](https://pan.baidu.com/s/1WIR01oz16v60UUlTaBpJDQ) |
+| **Password** | `wtdm` |
 
-### Quick Demo
+### 🎬 Feature Preview (no audio)
 
-[![Function Demo](video/功能展示.mp4)](video/功能展示.mp4)
-
-*Click the link above to watch the feature demonstration.*
+[Watch feature demo](video/功能展示.mp4) (67 MB, click to play in browser)
 
 ## Tech Stack
 
